@@ -17,8 +17,8 @@ settings:
     INFOPLIST_KEY_UILaunchScreen_Generation: YES
     INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
     INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
-    MARKETING_VERSION: '1.4.0'
-    CURRENT_PROJECT_VERSION: '9'
+    MARKETING_VERSION: '1.4.1'
+    CURRENT_PROJECT_VERSION: '10'
 targets:
   Loom:
     type: application

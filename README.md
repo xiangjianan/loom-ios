@@ -141,3 +141,11 @@ xcodebuild test -project Loom.xcodeproj -scheme Loom \
 
 ![轮次横杠](docs/round-rail-1.4.png)
 ![已发送消息的引用展开](docs/sent-references-1.4.png)
+
+
+## 1.4.1 状态栏 Liquid Glass
+
+专注阅读顶部改用系统原生 Liquid Glass，使用 regular 材质、轻微系统背景色调与适度透明度，保留状态栏信息对比度，让正文隐约透出。下缘继续渐变淡出。已检查浅色与深色显示，两个模式的阅读交互测试均通过；真机签名构建通过。
+
+![浅色 Liquid Glass](docs/status-glass-1.4.1-light.png)
+![深色 Liquid Glass](docs/status-glass-1.4.1-dark.png)

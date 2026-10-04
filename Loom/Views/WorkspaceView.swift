@@ -25,8 +25,10 @@ struct WorkspaceView: View {
                 .overlay(alignment: .top) {
                     if !readingChromeVisible {
                         Rectangle()
-                            .fill(.ultraThinMaterial)
+                            .fill(.clear)
                             .frame(height: geometry.safeAreaInsets.top + 16)
+                            .glassEffect(.regular.tint(Color(uiColor: .systemBackground).opacity(0.08)), in: .rect(cornerRadius: 0))
+                            .opacity(0.88)
                             .mask {
                                 LinearGradient(stops: [
                                     .init(color: .black, location: 0),

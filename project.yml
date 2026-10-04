@@ -1,0 +1,49 @@
+name: Loom
+options:
+  bundleIdPrefix: online.minidesk
+  deploymentTarget:
+    iOS: '26.0'
+settings:
+  base:
+    SWIFT_VERSION: '6.0'
+    TARGETED_DEVICE_FAMILY: '1,2'
+    DEVELOPMENT_TEAM: ''
+    CODE_SIGN_STYLE: Automatic
+    GENERATE_INFOPLIST_FILE: YES
+    INFOPLIST_KEY_CFBundleDisplayName: Loom
+    INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
+    INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+    INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
+    INFOPLIST_KEY_UILaunchScreen_Generation: YES
+    INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
+    INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
+    MARKETING_VERSION: '1.0.0'
+    CURRENT_PROJECT_VERSION: '1'
+targets:
+  Loom:
+    type: application
+    platform: iOS
+    sources: [Loom]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: online.minidesk.loom
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+  LoomTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [LoomTests]
+    dependencies:
+      - target: Loom
+  LoomUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [LoomUITests]
+    dependencies:
+      - target: Loom
+schemes:
+  Loom:
+    build:
+      targets:
+        Loom: all
+    test:
+      targets: [LoomTests, LoomUITests]

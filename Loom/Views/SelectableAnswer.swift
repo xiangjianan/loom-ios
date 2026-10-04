@@ -30,7 +30,8 @@ struct SelectableAnswer: UIViewRepresentable {
         let selected = view.selectedRange
         context.coordinator.updating = true
         let text = AnswerRenderer.render(content)
-        for mark in highlights where NSMaxRange(mark.range) <= text.length {
+        for saved in highlights {
+            guard let mark = HighlightResolver.resolve(saved, in: text.string) else { continue }
             text.addAttribute(.backgroundColor, value: UIColor.systemYellow.withAlphaComponent(0.3), range: mark.range)
         }
         view.attributedText = text
@@ -62,35 +63,5 @@ struct SelectableAnswer: UIViewRepresentable {
                 self.parent.onSelection(range, selected)
             }
         }
-    }
-}
-
-@MainActor enum AnswerRenderer {
-    static func render(_ markdown: String) -> NSMutableAttributedString {
-        let font = UIFont.preferredFont(forTextStyle: .body)
-        let paragraph = NSMutableParagraphStyle()
-        paragraph.lineSpacing = 4
-        paragraph.paragraphSpacing = 3
-        guard let parsed = try? AttributedString(markdown: markdown, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)) else {
-            return NSMutableAttributedString(string: markdown, attributes: [.font: font, .foregroundColor: UIColor.label, .paragraphStyle: paragraph])
-        }
-        let result = NSMutableAttributedString(string: String(parsed.characters), attributes: [.font: font, .foregroundColor: UIColor.label, .paragraphStyle: paragraph])
-        for run in parsed.runs {
-            let start = String(parsed.characters[..<run.range.lowerBound]).utf16.count
-            let length = String(parsed.characters[run.range]).utf16.count
-            let range = NSRange(location: start, length: length)
-            var traits = UIFontDescriptor.SymbolicTraits()
-            if run.inlinePresentationIntent?.contains(.stronglyEmphasized) == true { traits.insert(.traitBold) }
-            if run.inlinePresentationIntent?.contains(.emphasized) == true { traits.insert(.traitItalic) }
-            if let descriptor = font.fontDescriptor.withSymbolicTraits(traits) {
-                result.addAttribute(.font, value: UIFont(descriptor: descriptor, size: font.pointSize), range: range)
-            }
-            if run.inlinePresentationIntent?.contains(.code) == true {
-                result.addAttribute(.font, value: UIFont.monospacedSystemFont(ofSize: font.pointSize - 1, weight: .regular), range: range)
-                result.addAttribute(.backgroundColor, value: UIColor.secondarySystemFill, range: range)
-            }
-            if let link = run.link { result.addAttribute(.link, value: link, range: range) }
-        }
-        return result
     }
 }

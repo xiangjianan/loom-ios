@@ -64,7 +64,12 @@ final class LoomStore {
                 }
             }
         }
-        if demo { seedDemo() }
+        if demo {
+            seedDemo()
+            if ProcessInfo.processInfo.arguments.contains("--demo-markdown") {
+                mutateCurrent { $0.threads[0].messages[1].content = MarkdownPreview.content }
+            }
+        }
     }
 
     func discoverModels(configuration: ModelConfiguration, key: String) async throws -> [AvailableModel] {
@@ -236,6 +241,8 @@ final class LoomStore {
         mutateCurrent { conversation in
             guard let t = conversation.threads.firstIndex(where: { $0.id == threadID }),
                   let m = conversation.threads[t].messages.firstIndex(where: { $0.id == messageID }) else { return }
+            let rendered = AnswerRenderer.render(conversation.threads[t].messages[m].content).string
+            conversation.threads[t].messages[m].highlights = conversation.threads[t].messages[m].highlights.compactMap { HighlightResolver.resolve($0, in: rendered) }
             let old = conversation.threads[t].messages[m].highlights.filter { $0.overlaps(range) }
             // A selection expanded with the handles replaces overlapping highlights and quotes.
             if old.count == 1, old[0].range == range { return }

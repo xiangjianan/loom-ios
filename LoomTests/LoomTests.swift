@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 @testable import Loom
 
 @MainActor final class LoomTests: XCTestCase {
@@ -51,6 +52,44 @@ import XCTest
         XCTAssertTrue(prompt.contains("【Claude / model-b · 第 2 轮】"))
         XCTAssertTrue(prompt.contains(quote.text))
         XCTAssertEqual(Conversation.prompt("问题", quotes: []), "问题")
+    }
+
+    func testFullMarkdownStructureAndStyling() throws {
+        let rendered = AnswerRenderer.render(MarkdownPreview.content)
+        XCTAssertTrue(rendered.string.contains("从一个想法开始\n"))
+        XCTAssertFalse(rendered.string.contains("# 从"))
+        XCTAssertFalse(rendered.string.contains("```"))
+        XCTAssertFalse(rendered.string.contains("| --- |"))
+        XCTAssertTrue(rendered.string.contains("•\t找到真实的问题"))
+        XCTAssertTrue(rendered.string.contains("模型\t擅长"))
+        let title = (rendered.string as NSString).range(of: "从一个想法开始")
+        let body = (rendered.string as NSString).range(of: "让 ")
+        let titleFont = try XCTUnwrap(rendered.attribute(.font, at: title.location, effectiveRange: nil) as? UIFont)
+        let bodyFont = try XCTUnwrap(rendered.attribute(.font, at: body.location, effectiveRange: nil) as? UIFont)
+        XCTAssertGreaterThan(titleFont.pointSize, bodyFont.pointSize)
+        let code = (rendered.string as NSString).range(of: "let idea")
+        let codeFont = try XCTUnwrap(rendered.attribute(.font, at: code.location, effectiveRange: nil) as? UIFont)
+        XCTAssertTrue(codeFont.fontDescriptor.symbolicTraits.contains(.traitMonoSpace))
+        let link = (rendered.string as NSString).range(of: "项目文档")
+        XCTAssertNotNil(rendered.attribute(.link, at: link.location, effectiveRange: nil))
+    }
+
+    func testListsCodeAndInlineFormattingStaySeparate() {
+        let rendered = AnswerRenderer.render("1. 第一项\n2. 第二项\n\n```text\n# 保留代码\n**不是粗体**\n```\n\n~~删除~~")
+        XCTAssertTrue(rendered.string.contains("1.\t第一项\n2.\t第二项"))
+        XCTAssertTrue(rendered.string.contains("# 保留代码\n**不是粗体**"))
+        let range = (rendered.string as NSString).range(of: "删除")
+        XCTAssertNotNil(rendered.attribute(.strikethroughStyle, at: range.location, effectiveRange: nil))
+    }
+
+    func testOldHighlightReanchorsAfterMarkdownRendering() throws {
+        let text = AnswerRenderer.render("# 标题\n\n**观点** 和后续内容").string
+        let old = Highlight(location: 8, length: 2, text: "观点")
+        let resolved = try XCTUnwrap(HighlightResolver.resolve(old, in: text))
+        XCTAssertEqual((text as NSString).substring(with: resolved.range), old.text)
+        XCTAssertEqual(resolved.id, old.id)
+        let oldHeading = Highlight(location: 0, length: 4, text: "# 标题")
+        XCTAssertEqual(HighlightResolver.resolve(oldHeading, in: text)?.text, "标题")
     }
 
     func testSelectionRangesMatchRenderedUnicode() {

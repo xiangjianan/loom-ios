@@ -91,4 +91,15 @@ import UIKit
         XCTAssertEqual(app.textFields["model-id"].value as? String, "fixture-chat")
     }
 
+    func testRenderedMarkdownStillSupportsNativeHighlight() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--demo", "--demo-markdown"]
+        app.launch()
+        let answer = app.textViews.firstMatch
+        XCTAssertTrue(answer.waitForExistence(timeout: 10))
+        XCTAssertFalse(answer.value.debugDescription.contains("# 从一个"))
+        answer.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.04)).press(forDuration: 1.2)
+        XCTAssertTrue(app.scrollViews["quote-tray"].waitForExistence(timeout: 5))
+    }
+
 }

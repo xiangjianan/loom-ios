@@ -51,7 +51,7 @@ struct SettingsView: View {
                     Button("清除当前对话的所有高亮", role: .destructive) { clearConfirmation = true }
                 } header: { Text("阅读") }
                 Section {
-                    LabeledContent("版本", value: "1.1.0")
+                    LabeledContent("版本", value: "1.1.1")
                     Text("Loom 让多个模型的观点交织，帮助你继续思考。对话与高亮保存在本地，暂不与网页或其他设备同步。")
                         .font(.footnote).foregroundStyle(.secondary)
                     Link("项目源码", destination: URL(string: "https://github.com/xiangjianan/loom-ios")!)

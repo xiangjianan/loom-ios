@@ -46,7 +46,7 @@ import UIKit
         XCUIDevice.shared.orientation = .portrait
     }
 
-    func testSelectionRequiresMenuAndRemovingQuote() throws {
+    func testNativeSelectionMenuDoesNotCreateQuote() {
         let app = XCUIApplication()
         app.launchArguments = ["--demo"]
         app.launch()
@@ -54,42 +54,103 @@ import UIKit
         XCTAssertTrue(answer.waitForExistence(timeout: 10))
         answer.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.04)).press(forDuration: 1.2)
         XCTAssertFalse(app.scrollViews["quote-tray"].exists)
-        let highlight = app.buttons["高亮"]
-        XCTAssertTrue(highlight.waitForExistence(timeout: 5))
-        highlight.tap()
+        let copy = app.menuItems.matching(NSPredicate(format: "label IN %@", ["Copy", "拷贝", "复制"])).firstMatch
+        XCTAssertTrue(copy.waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertFalse(app.otherElements["UIContextMenuContentView"].exists)
+        for _ in 0..<4 where !app.menuItems["高亮"].exists {
+            app.buttons.matching(NSPredicate(format: "label == %@", "Next Page")).allElementsBoundByIndex.last?.tap()
+        }
+        XCTAssertTrue(app.menuItems["高亮"].waitForExistence(timeout: 5))
+        app.menuItems["高亮"].tap()
         XCTAssertTrue(app.scrollViews["quote-tray"].waitForExistence(timeout: 5))
-        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "移除引用：")).firstMatch.tap()
-        XCTAssertFalse(app.scrollViews["quote-tray"].exists)
     }
-    func testDoubleTapHighlightsParagraph() {
+    func testSingleTapSentenceTogglesHighlight() {
         let app = XCUIApplication()
         app.launchArguments = ["--demo"]
         app.launch()
         let answer = app.textViews.firstMatch
         XCTAssertTrue(answer.waitForExistence(timeout: 10))
-        answer.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.04)).doubleTap()
+        let point = answer.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.04))
+        point.tap()
         XCTAssertTrue(app.scrollViews["quote-tray"].waitForExistence(timeout: 5))
-        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "移除引用：")).firstMatch.tap()
+        point.tap()
         XCTAssertFalse(app.scrollViews["quote-tray"].exists)
     }
-    func testSingleTapParagraphHighlightSetting() {
+    func testDoubleTapSentenceSettingAndRemoval() {
         let app = XCUIApplication()
         app.launchArguments = ["--demo"]
         app.launch()
-        let answer = app.textViews.firstMatch
-        XCTAssertTrue(answer.waitForExistence(timeout: 10))
-        answer.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.04)).tap()
-        XCTAssertFalse(app.scrollViews["quote-tray"].exists)
         app.buttons["workspace-menu"].tap()
         app.buttons["模型设置"].tap()
         app.swipeUp()
-        let mode = app.buttons["paragraph-highlight-mode"]
+        let mode = app.buttons["sentence-highlight-mode"]
         XCTAssertTrue(mode.waitForExistence(timeout: 5))
         mode.tap()
-        app.buttons["单击段落"].tap()
+        app.buttons["双击句子"].tap()
         app.buttons["完成"].tap()
-        answer.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.04)).tap()
+        let answer = app.textViews.firstMatch
+        let point = answer.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.04))
+        point.tap()
+        XCTAssertFalse(app.scrollViews["quote-tray"].exists)
+        point.doubleTap()
         XCTAssertTrue(app.scrollViews["quote-tray"].waitForExistence(timeout: 5))
+        point.doubleTap()
+        XCTAssertFalse(app.scrollViews["quote-tray"].exists)
+        point.doubleTap()
+        XCTAssertTrue(app.scrollViews["quote-tray"].waitForExistence(timeout: 5))
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "移除引用：")).firstMatch.tap()
+        XCTAssertFalse(app.scrollViews["quote-tray"].exists)
+    }
+
+    func testSVGAppearsInlineAndSentencesAreIndependent() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--demo", "--demo-svg"]
+        app.launch()
+        XCTAssertTrue(app.descendants(matching: .any)["svg-image"].waitForExistence(timeout: 10))
+        let answer = app.textViews.firstMatch
+        XCTAssertFalse(answer.value.debugDescription.contains("<svg"))
+        let point = answer.coordinate(withNormalizedOffset: CGVector(dx: 0.18, dy: 0.025))
+        point.tap()
+        XCTAssertTrue(app.scrollViews["quote-tray"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["第一句，逗号、顿号和冒号：都留在一句里。"].exists)
+        let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.lifetime = .keepAlways; add(screenshot)
+    }
+
+    func testHistoryDeletionRequiresExplicitConfirmation() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--demo"]
+        app.launch()
+        app.buttons["workspace-menu"].tap()
+        app.buttons["历史对话"].tap()
+        let row = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "history-row-")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        let originalLabel = row.label
+        row.swipeLeft()
+        app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "history-delete-")).firstMatch.tap()
+        XCTAssertTrue(app.buttons["cancel-delete"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["confirm-delete"].exists)
+        let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.lifetime = .keepAlways; add(screenshot)
+        app.buttons["cancel-delete"].tap()
+        XCTAssertEqual(row.label, originalLabel)
+        row.swipeLeft()
+        app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "history-delete-")).firstMatch.tap()
+        app.buttons["confirm-delete"].tap()
+        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label == %@", originalLabel)).firstMatch.exists)
+    }
+
+    func testDraggingSelectionHandleScrollsLongAnswer() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--demo", "--demo-long"]
+        app.launch()
+        let answer = app.textViews.firstMatch
+        XCTAssertTrue(answer.waitForExistence(timeout: 10))
+        let origin = answer.coordinate(withNormalizedOffset: .zero)
+        origin.withOffset(CGVector(dx: 88, dy: 11)).press(forDuration: 1.2)
+        let before = answer.frame.minY
+        let edge = app.scrollViews["thread-OpenAI"].coordinate(withNormalizedOffset: CGVector(dx: 0.6, dy: 0.98))
+        origin.withOffset(CGVector(dx: 94, dy: 28)).press(forDuration: 0.2, thenDragTo: edge, withVelocity: .slow, thenHoldForDuration: 2)
+        XCTAssertLessThan(answer.frame.minY, before - 60)
+        let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.lifetime = .keepAlways; add(screenshot)
     }
 
     func testComposerExpandsAndKeepsSendAtBottom() {
@@ -128,19 +189,14 @@ import UIKit
         XCTAssertEqual(app.textFields["model-id"].value as? String, "fixture-chat")
     }
 
-    func testRenderedMarkdownStillSupportsNativeHighlight() {
+    func testRenderedMarkdownSupportsSentenceHighlight() {
         let app = XCUIApplication()
         app.launchArguments = ["--demo", "--demo-markdown"]
         app.launch()
         let answer = app.textViews.firstMatch
         XCTAssertTrue(answer.waitForExistence(timeout: 10))
         XCTAssertFalse(answer.value.debugDescription.contains("# 从一个"))
-        answer.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.04)).press(forDuration: 1.2)
-        XCTAssertFalse(app.scrollViews["quote-tray"].exists)
-        let highlight = app.buttons["高亮"]
-        XCTAssertTrue(highlight.waitForExistence(timeout: 5))
-        highlight.tap()
+        answer.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.04)).tap()
         XCTAssertTrue(app.scrollViews["quote-tray"].waitForExistence(timeout: 5))
     }
-
 }

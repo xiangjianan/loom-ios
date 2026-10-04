@@ -10,6 +10,87 @@ import UIKit
         return URLSession(configuration: config)
     }
 
+    func testSentenceRangesUseTerminalPunctuationAndPreserveUnicode() throws {
+        let text = "第一句，包含逗号、顿号：仍是同一句。第二句！第三句？\nEmoji 👨‍👩‍👧‍👦 和数字 3.14，同一句。 One sentence, with a colon: yes. Next!"
+        let string = text as NSString
+        for (word, expected) in [("包含", "第一句，包含逗号、顿号：仍是同一句。"), ("第二", "第二句！"), ("第三", "第三句？"), ("数字", "Emoji 👨‍👩‍👧‍👦 和数字 3.14，同一句。"), ("colon", "One sentence, with a colon: yes."), ("Next", "Next!")] {
+            let range = try XCTUnwrap(SentenceSelection.range(in: text, at: string.range(of: word).location))
+            XCTAssertEqual(string.substring(with: range), expected)
+        }
+        let quoted = "他说：‘这样很好！’下一句。"
+        let range = try XCTUnwrap(SentenceSelection.range(in: quoted, at: 3))
+        XCTAssertEqual((quoted as NSString).substring(with: range), "他说：‘这样很好！’")
+    }
+    func testSentenceHighlightToggleDoesNotAffectOtherSentences() {
+        let store = LoomStore(fileURL: temporaryFile(), demo: true)
+        XCTAssertTrue(store.singleTapHighlight)
+        let thread = store.current.threads[0]
+        let message = thread.messages.first(where: { $0.role == "assistant" })!
+        let text = AnswerRenderer.render(message.content).string as NSString
+        let first = SentenceSelection.range(in: text as String, at: 0)!
+        let second = SentenceSelection.range(in: text as String, at: NSMaxRange(first) + 1)!
+        store.toggleHighlight(threadID: thread.id, messageID: message.id, range: first, text: text.substring(with: first))
+        store.toggleHighlight(threadID: thread.id, messageID: message.id, range: second, text: text.substring(with: second))
+        store.toggleHighlight(threadID: thread.id, messageID: message.id, range: first, text: text.substring(with: first))
+        XCTAssertEqual(store.current.quotes.map(\.text), [text.substring(with: second)])
+        XCTAssertEqual(store.current.threads[0].messages.first(where: { $0.id == message.id })!.highlights.map(\.range), [second])
+    }
+    func testSVGIsAnInlineAttachmentAndSurroundingTextRemainsSelectable() throws {
+        let svg = #"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 200"><rect width="400" height="200" fill="blue"/><text x="10" y="40">SVG 图像</text></svg>"#
+        let rendered = AnswerRenderer.render("前面的文字。\n\n```svg\n" + svg + "\n```\n\n后面的文字。")
+        XCTAssertEqual(rendered.string, "前面的文字。\n\n￼\n后面的文字。".replacingOccurrences(of: "\n\n", with: "\n"))
+        let range = (rendered.string as NSString).range(of: "￼")
+        let attachment = try XCTUnwrap(rendered.attribute(.attachment, at: range.location, effectiveRange: nil) as? SVGTextAttachment)
+        XCTAssertEqual(attachment.document.aspectRatio, 2)
+        XCTAssertNotNil(attachment.image)
+        XCTAssertFalse(attachment.document.html.contains("default-src *"))
+        XCTAssertTrue(attachment.document.html.contains("default-src 'none'"))
+        XCTAssertEqual(attachment.document.bounds(width: 300).height, 150)
+        let raw = AnswerRenderer.render(svg)
+        XCTAssertEqual(raw.string, "￼")
+        let nested = svg.replacingOccurrences(of: "</svg>", with: "<svg viewBox='0 0 1 1'><circle r='1'/></svg></svg>")
+        XCTAssertEqual(AnswerRenderer.render(nested).string, "￼")
+        XCTAssertNil(SVGDocument("<svg><broken></svg>"))
+    }
+
+    func testSelectionAutoScrollContinuesAtEdgeAndStopsOnRelease() throws {
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 400, height: 820)
+        let controller = UIViewController()
+        window.rootViewController = controller
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        let scroll = UIScrollView(frame: CGRect(x: 0, y: 100, width: 400, height: 500))
+        controller.view.addSubview(scroll)
+        let textView = UITextView(frame: CGRect(x: 0, y: 0, width: 400, height: 3000))
+        textView.isEditable = false; textView.isSelectable = true; textView.isScrollEnabled = false
+        textView.text = ReadingPreview.long
+        scroll.addSubview(textView)
+        scroll.contentSize = CGSize(width: 400, height: 3000)
+        controller.view.layoutIfNeeded(); textView.layoutIfNeeded()
+        textView.selectedRange = NSRange(location: 0, length: 3)
+        let driver = SelectionAutoScroller(textView: textView)
+        driver.attach()
+        let end = try XCTUnwrap(textView.selectedTextRange).end
+        let caret = textView.caretRect(for: end)
+        let handle = textView.convert(CGPoint(x: caret.midX, y: caret.maxY), to: window)
+        driver.touch(.began, point: handle)
+        let edge = scroll.convert(CGPoint(x: 160, y: scroll.bounds.maxY - 2), to: window)
+        driver.touch(.moved, point: edge)
+        driver.step()
+        let firstOffset = scroll.contentOffset.y
+        for _ in 0..<25 { driver.step() }
+        XCTAssertGreaterThan(firstOffset, 0)
+        XCTAssertGreaterThan(scroll.contentOffset.y, firstOffset + 100)
+        XCTAssertGreaterThan(textView.selectedRange.length, 3)
+        driver.touch(.ended, point: edge)
+        let stoppedOffset = scroll.contentOffset.y
+        driver.step()
+        XCTAssertEqual(scroll.contentOffset.y, stoppedOffset)
+        driver.stop()
+    }
+
     func testRemovingQuoteRemovesOnlyItsOriginalHighlight() {
         let store = LoomStore(fileURL: temporaryFile(), demo: true)
         let thread = store.current.threads[0]

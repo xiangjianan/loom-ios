@@ -7,7 +7,6 @@ struct HistoryView: View {
     @State private var pendingSelection: UUID?
     @State private var pendingDeletion: UUID?
     @State private var selectionConfirmation = false
-    @State private var deletionConfirmation = false
     private var results: [Conversation] {
         store.conversations.filter {
             search.isEmpty || $0.title.localizedCaseInsensitiveContains(search) ||
@@ -33,8 +32,9 @@ struct HistoryView: View {
                             }
                         }.padding(.vertical, 7)
                     }
-                    .swipeActions {
-                        Button("删除", role: .destructive) { pendingDeletion = conversation.id; deletionConfirmation = true }
+                    .accessibilityIdentifier("history-row-\(conversation.id)")
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        Button("删除") { withAnimation(.easeInOut(duration: 0.18)) { pendingDeletion = conversation.id } }.tint(.red).accessibilityIdentifier("history-delete-\(conversation.id)")
                     }
                 }
             }
@@ -47,9 +47,44 @@ struct HistoryView: View {
                     if let id = pendingSelection { store.selectConversation(id); dismiss() }
                 }
             }
-            .confirmationDialog("删除这段对话及其高亮？", isPresented: $deletionConfirmation, titleVisibility: .visible) {
-                Button("删除对话", role: .destructive) { if let id = pendingDeletion { store.deleteConversation(id) } }
+        }
+        .accessibilityHidden(pendingDeletion != nil)
+        .overlay {
+            if let id = pendingDeletion {
+                DeleteConversationConfirmation {
+                    withAnimation(.easeInOut(duration: 0.18)) { pendingDeletion = nil }
+                } delete: {
+                    store.deleteConversation(id)
+                    withAnimation(.easeInOut(duration: 0.18)) { pendingDeletion = nil }
+                }.transition(.opacity).zIndex(1)
             }
         }
+    }
+}
+
+private struct DeleteConversationConfirmation: View {
+    var cancel: () -> Void
+    var delete: () -> Void
+    @AccessibilityFocusState private var focused: Bool
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.3).ignoresSafeArea()
+            VStack(spacing: 0) {
+                VStack(spacing: 10) {
+                    Text("删除这段对话？").font(.headline).accessibilityFocused($focused)
+                    Text("这段对话及其高亮将一并删除。").font(.subheadline).foregroundStyle(.secondary)
+                }.multilineTextAlignment(.center).padding(24)
+                Divider()
+                HStack(spacing: 0) {
+                    Button("取消", role: .cancel, action: cancel).accessibilityIdentifier("cancel-delete").frame(maxWidth: .infinity, minHeight: 50)
+                    Divider().frame(height: 50)
+                    Button("删除", role: .destructive, action: delete).accessibilityIdentifier("confirm-delete").foregroundStyle(.red).frame(maxWidth: .infinity, minHeight: 50)
+                }.buttonStyle(.plain)
+            }
+            .frame(maxWidth: 300)
+            .background(.regularMaterial, in: .rect(cornerRadius: 24))
+            .padding(24)
+            .accessibilityAddTraits(.isModal)
+        }.onAppear { focused = true }
     }
 }

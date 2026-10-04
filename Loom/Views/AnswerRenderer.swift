@@ -4,7 +4,8 @@ import UIKit
 /// Foundation parses Markdown semantics; TextKit displays native selectable rich text.
 @MainActor enum AnswerRenderer {
     static func render(_ markdown: String) -> NSMutableAttributedString {
-        guard let parsed = try? AttributedString(markdown: markdown, options: .init(
+        let extracted = SVGDocument.extract(from: markdown)
+        guard let parsed = try? AttributedString(markdown: extracted.markdown, options: .init(
             interpretedSyntax: .full, failurePolicy: .returnPartiallyParsedIfPossible)) else {
             return NSMutableAttributedString(string: markdown, attributes: baseAttributes())
         }
@@ -83,6 +84,11 @@ import UIKit
         flushTable()
         // Code fences have a trailing newline from the parser; do not leave a blank last line.
         while output.string.hasSuffix("\n") { output.deleteCharacters(in: NSRange(location: output.length - 1, length: 1)) }
+        for (token, document) in extracted.documents {
+            let range = (output.string as NSString).range(of: token)
+            guard range.location != NSNotFound else { continue }
+            output.replaceCharacters(in: range, with: NSAttributedString(attachment: SVGTextAttachment(document: document), attributes: baseAttributes()))
+        }
         return output
     }
 
@@ -116,6 +122,7 @@ import UIKit
                 paragraph.firstLineHeadIndent += 12; paragraph.headIndent += 12
                 attributes[.foregroundColor] = UIColor.secondaryLabel
             case .codeBlock:
+                attributes[.loomCode] = true
                 font = UIFont.monospacedSystemFont(ofSize: font.pointSize - 1, weight: .regular)
                 paragraph.firstLineHeadIndent = 10; paragraph.headIndent = 10; paragraph.tailIndent = -10
                 paragraph.paragraphSpacingBefore = 8; paragraph.paragraphSpacing = 12
@@ -131,6 +138,7 @@ import UIKit
         if inline?.contains(.emphasized) == true { traits.insert(.traitItalic) }
         if let descriptor = font.fontDescriptor.withSymbolicTraits(traits) { font = UIFont(descriptor: descriptor, size: font.pointSize) }
         if inline?.contains(.code) == true {
+            attributes[.loomCode] = true
             font = UIFont.monospacedSystemFont(ofSize: font.pointSize - 1, weight: .regular)
             attributes[.backgroundColor] = UIColor.secondarySystemFill
         }

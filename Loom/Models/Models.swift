@@ -70,6 +70,7 @@ struct SavedState: Codable {
     var relayURL: String
     var useRelay: Bool? = nil
     var singleTapHighlight: Bool? = nil
+    var highlightGesture: String? = nil
 }
 
 struct APIMessage: Codable, Equatable, Sendable {

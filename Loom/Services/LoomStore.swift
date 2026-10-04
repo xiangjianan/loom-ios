@@ -46,7 +46,7 @@ final class LoomStore {
         let configs = state?.configurations.isEmpty == false ? state!.configurations : ModelConfiguration.defaults
         configurations = configs
         relayURL = state?.relayURL ?? RelayClient.defaultURL
-        singleTapHighlight = state?.singleTapHighlight ?? false
+        singleTapHighlight = state?.highlightGesture != "double"
         useRelay = state?.useRelay ?? false
         let initial = Conversation(threads: configs.map { ModelThread(configuration: $0) })
         let loaded = state?.conversations.isEmpty == false ? state!.conversations : [initial]
@@ -71,6 +71,8 @@ final class LoomStore {
             if ProcessInfo.processInfo.arguments.contains("--demo-markdown") {
                 mutateCurrent { $0.threads[0].messages[1].content = MarkdownPreview.content }
             }
+            if ProcessInfo.processInfo.arguments.contains("--demo-svg") { mutateCurrent { $0.threads[0].messages[1].content = ReadingPreview.svg } }
+            if ProcessInfo.processInfo.arguments.contains("--demo-long") { mutateCurrent { $0.threads[0].messages[1].content = ReadingPreview.long } }
         }
     }
 
@@ -260,6 +262,16 @@ final class LoomStore {
         save()
     }
 
+    func toggleHighlight(threadID: UUID, messageID: UUID, range: NSRange, text: String) {
+        guard let message = current.threads.first(where: { $0.id == threadID })?.messages.first(where: { $0.id == messageID }) else { return }
+        let rendered = AnswerRenderer.render(message.content).string
+        if let existing = message.highlights.compactMap({ HighlightResolver.resolve($0, in: rendered) }).first(where: { $0.range == range }) {
+            removeQuote(existing.id)
+        } else {
+            highlight(threadID: threadID, messageID: messageID, range: range, text: text)
+        }
+    }
+
     func removeQuote(_ id: UUID) {
         mutateCurrent { conversation in
             conversation.quotes.removeAll { $0.id == id }
@@ -299,7 +311,7 @@ final class LoomStore {
         do {
             try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
             let data = try JSONEncoder().encode(SavedState(configurations: configurations, conversations: conversations,
-                                                          selectedConversation: selectedConversation, relayURL: relayURL, useRelay: useRelay, singleTapHighlight: singleTapHighlight))
+                                                          selectedConversation: selectedConversation, relayURL: relayURL, useRelay: useRelay, singleTapHighlight: singleTapHighlight, highlightGesture: singleTapHighlight ? "single" : "double"))
             try data.write(to: fileURL, options: [.atomic, .completeFileProtection])
         } catch { notice = "本地保存失败：\(error.localizedDescription)" }
     }

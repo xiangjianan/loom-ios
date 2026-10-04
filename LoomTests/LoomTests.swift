@@ -9,6 +9,21 @@ import XCTest
         return URLSession(configuration: config)
     }
 
+    func testProviderPresetsFillEndpointAndProtocol() {
+        for preset in ProviderPreset.all {
+            var configuration = ModelConfiguration(name: "Old", endpoint: "https://old.example", model: "old-model")
+            let id = configuration.id
+            preset.apply(to: &configuration)
+            XCTAssertEqual(configuration.id, id)
+            XCTAssertEqual(configuration.endpoint, preset.endpoint)
+            XCTAssertEqual(configuration.protocolKind, preset.protocolKind)
+            XCTAssertEqual(configuration.model, "")
+            XCTAssertEqual(ProviderPreset.matching(configuration)?.id, preset.id)
+        }
+        XCTAssertFalse(ModelDiscoveryInput(endpoint: "http://example.com", protocolKind: "openai", key: "key", relay: nil).valid)
+        XCTAssertFalse(ModelDiscoveryInput(endpoint: "https://example.com", protocolKind: "openai", key: "   ", relay: nil).valid)
+    }
+
     func testReferencesIncludeSourceAndRound() {
         let quote = Quote(id: UUID(), text: "一个重要的观点", modelName: "Claude", model: "model-b", round: 2)
         let prompt = Conversation.prompt("继续", quotes: [quote])

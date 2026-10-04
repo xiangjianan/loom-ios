@@ -19,23 +19,27 @@ struct WorkspaceView: View {
                     else { phoneBoard }
                 }
                 .safeAreaInset(edge: .top, spacing: 0) {
-                    if !parallel { modelTabs.padding(.vertical, 8) }
+                    HStack(spacing: 8) {
+                        modelTabs
+                        Menu {
+                            Button("新对话", systemImage: "square.and.pencil") {
+                                if store.isWorking { showNewConfirmation = true } else { store.newConversation() }
+                            }
+                            Button("历史对话", systemImage: "clock") { sheet = .history }
+                            Button("模型设置", systemImage: "slider.horizontal.3") { sheet = .settings }
+                        } label: {
+                            Image(systemName: "ellipsis").font(.headline).frame(width: 44, height: 44)
+                                .glassEffect(.regular.interactive(), in: .circle)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("更多操作").accessibilityIdentifier("workspace-menu")
+                        .padding(.trailing, 12)
+                    }.padding(.vertical, 4)
+
                 }
                 .safeAreaInset(edge: .bottom, spacing: 0) { ComposerView(store: store) }
             }
-            .navigationTitle("Loom")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("历史", systemImage: "clock") { sheet = .history }.labelStyle(.iconOnly)
-                }
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button("新对话", systemImage: "square.and.pencil") {
-                        if store.isWorking { showNewConfirmation = true } else { store.newConversation() }
-                    }.labelStyle(.iconOnly)
-                    Button("模型设置", systemImage: "slider.horizontal.3") { sheet = .settings }.labelStyle(.iconOnly)
-                }
-            }
+            .toolbar(.hidden, for: .navigationBar)
             .sheet(item: $sheet) { destination in
                 switch destination {
                 case .settings: SettingsView(store: store)
@@ -77,7 +81,7 @@ struct WorkspaceView: View {
                             .accessibilityIdentifier("model-tab-\(thread.configuration.name)")
                             .id(thread.id)
                         }
-                    }.padding(.horizontal, 20)
+                    }.padding(.leading, 12).padding(.trailing, 4)
                 }.padding(.vertical, 4)
             }
             .scrollIndicators(.hidden)
@@ -101,24 +105,21 @@ struct WorkspaceView: View {
     private func parallelBoard(width: CGFloat) -> some View {
         let count = max(1, store.current.threads.count)
         let columnWidth = max(310, (width - 48 - CGFloat(count - 1) * 16) / CGFloat(count))
-        return ScrollView(.horizontal) {
+        return ScrollViewReader { proxy in
+        ScrollView(.horizontal) {
+            GlassEffectContainer(spacing: 16) {
             HStack(alignment: .top, spacing: 16) {
                 ForEach(store.current.threads) { thread in
-                    VStack(spacing: 0) {
-                        HStack {
-                            Circle().fill(.indigo).frame(width: 7, height: 7)
-                            Text(thread.configuration.name).font(.headline)
-                            Spacer()
-                            if store.busyModels.contains(thread.id) { ProgressView().controlSize(.small) }
-                        }
-                        .padding(16)
-                        .glassEffect(.regular, in: .rect(cornerRadius: 20))
-                        .padding(.horizontal, 8).padding(.bottom, 8)
-                        ThreadView(thread: thread, store: store)
-                    }.frame(width: columnWidth)
+                    ThreadView(thread: thread, store: store)
+                        .frame(width: columnWidth).id(thread.id)
                 }
             }.padding(.horizontal, 24).padding(.top, 12)
+            }
         }.scrollIndicators(.hidden)
+        .onChange(of: store.selectedModel) { _, id in
+            withAnimation(reduceMotion ? nil : .snappy) { proxy.scrollTo(id, anchor: .center) }
+        }
+        }
     }
 }
 

@@ -21,33 +21,31 @@ struct ComposerView: View {
                     }.padding(.horizontal, 4)
                 }.scrollIndicators(.hidden).accessibilityIdentifier("quote-tray")
             }
-            GlassEffectContainer(spacing: 12) {
-                HStack(alignment: .bottom, spacing: 12) {
-                    TextField("写下问题，让观点交织…", text: $store.draft, axis: .vertical)
-                        .lineLimit(1...5).padding(.horizontal, 18).padding(.vertical, 14)
-                        .focused($focused)
-                        .glassEffect(.regular, in: .rect(cornerRadius: 26))
-                        .accessibilityIdentifier("prompt-field")
-                    Button {
-                        if store.isWorking { store.cancelAll() }
-                        else { store.send(); if store.notice == nil { focused = false } }
-                    } label: {
-                        Image(systemName: store.isWorking ? "stop.fill" : "arrow.up")
-                            .font(.system(size: 19, weight: .semibold)).frame(width: 52, height: 52)
-                    }
-                    .buttonStyle(.glassProminent)
-                    .buttonBorderShape(.circle)
-                    .disabled(!store.isWorking && store.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    .accessibilityLabel(store.isWorking ? "停止生成" : "发送给所有模型")
-                    .accessibilityIdentifier("send-button")
+            HStack(alignment: .bottom, spacing: 8) {
+                TextField("写下问题…", text: $store.draft, axis: .vertical)
+                    .lineLimit(1...7)
+                    .focused($focused)
+                    .padding(.leading, 10).padding(.vertical, 10)
+                    .frame(minHeight: 44)
+                    .accessibilityIdentifier("prompt-field")
+                Button {
+                    if store.isWorking { store.cancelAll() }
+                    else { store.send(); if store.notice == nil { focused = false } }
+                } label: {
+                    Image(systemName: store.isWorking ? "stop.fill" : "arrow.up")
+                        .font(.system(size: 18, weight: .semibold)).frame(width: 44, height: 44)
+                        .foregroundStyle(.white)
+                        .background(store.isWorking || !store.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Color.indigo : Color.secondary.opacity(0.35), in: .circle)
                 }
+                .buttonStyle(.plain)
+                .disabled(!store.isWorking && store.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .accessibilityLabel(store.isWorking ? "停止生成" : "发送给所有模型")
+                .accessibilityIdentifier("send-button")
             }
-            HStack(spacing: 4) {
-                Image(systemName: "highlighter")
-                Text(store.current.quotes.isEmpty ? "选中文字，自动高亮并加入下一轮引用" : "\(store.current.quotes.count) 段引用将发送给所有模型")
-            }.font(.caption2).foregroundStyle(.secondary).accessibilityIdentifier("selection-hint")
+            .padding(6)
+            .glassEffect(.regular, in: .rect(cornerRadius: 28))
         }
-        .padding(.horizontal, 20).padding(.top, 10).padding(.bottom, 10)
+        .padding(.horizontal, 12).padding(.top, 6).padding(.bottom, 4)
         .frame(maxWidth: 1100).frame(maxWidth: .infinity)
     }
 }

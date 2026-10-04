@@ -67,6 +67,11 @@ final class LoomStore {
         if demo { seedDemo() }
     }
 
+    func discoverModels(configuration: ModelConfiguration, key: String) async throws -> [AvailableModel] {
+        if useRelay { return try await RelayClient(baseURL: relayURL, session: session).models(configuration: configuration, key: key) }
+        return try await ProviderClient(session: session).models(configuration: configuration, key: key)
+    }
+
     func key(for id: UUID) -> String { keychain.read(id) }
 
     func saveConfiguration(_ configuration: ModelConfiguration, key: String) throws {

@@ -51,7 +51,7 @@ struct SettingsView: View {
                     Button("清除当前对话的所有高亮", role: .destructive) { clearConfirmation = true }
                 } header: { Text("阅读") }
                 Section {
-                    LabeledContent("版本", value: "1.0.0")
+                    LabeledContent("版本", value: "1.1.0")
                     Text("Loom 让多个模型的观点交织，帮助你继续思考。对话与高亮保存在本地，暂不与网页或其他设备同步。")
                         .font(.footnote).foregroundStyle(.secondary)
                     Link("项目源码", destination: URL(string: "https://github.com/xiangjianan/loom-ios")!)
@@ -71,55 +71,65 @@ struct SettingsView: View {
 struct ModelEditor: View {
     var store: LoomStore
     @State var configuration: ModelConfiguration
+    @State private var providerID: String
     @Environment(\.dismiss) private var dismiss
     @State private var key = ""
     @State private var models: [AvailableModel] = []
     @State private var loading = false
     @State private var error: String?
     @State private var deleteConfirmation = false
-    @State private var loadTask: Task<Void, Never>?
+    @State private var refreshID = 0
 
+    init(store: LoomStore, configuration: ModelConfiguration) {
+        self.store = store
+        _configuration = State(initialValue: configuration)
+        _providerID = State(initialValue: ProviderPreset.matching(configuration)?.id ?? "custom")
+    }
+    private var discoveryInput: ModelDiscoveryInput {
+        ModelDiscoveryInput(endpoint: configuration.endpoint.trimmingCharacters(in: .whitespacesAndNewlines),
+                            protocolKind: configuration.protocolKind.rawValue,
+                            key: key.trimmingCharacters(in: .whitespacesAndNewlines),
+                            relay: store.useRelay ? store.relayURL : nil)
+    }
     var body: some View {
         Form {
-            Section("显示名称") { TextField("例如 OpenAI、Claude、DeepSeek", text: $configuration.name) }
             Section {
+                Picker("模型厂商", selection: $providerID) {
+                    ForEach(ProviderPreset.all) { Text($0.title).tag($0.id) }
+                    Text("自定义 / OpenAI 兼容").tag("custom")
+                }.accessibilityIdentifier("provider-picker")
+                TextField("显示名称", text: $configuration.name).accessibilityIdentifier("model-name")
+                SecureField("API Key", text: $key).textInputAutocapitalization(.never).autocorrectionDisabled()
+                    .accessibilityIdentifier("api-key")
+            } header: { Text("服务商") } footer: { Text("选择厂商后自动填入接口地址。输入 Key 后自动获取账号可用的模型。") }
+            Section {
+                if !models.isEmpty {
+                    Picker("在线型号", selection: $configuration.model) {
+                        if !models.contains(where: { $0.id == configuration.model }) {
+                            Text(configuration.model.isEmpty ? "请选择" : configuration.model).tag(configuration.model)
+                        }
+                        ForEach(models) { model in Text(model.name ?? model.id).tag(model.id) }
+                    }.accessibilityIdentifier("online-model-picker")
+                }
+                TextField("模型型号（也可手动输入）", text: $configuration.model)
+                    .textInputAutocapitalization(.never).autocorrectionDisabled().accessibilityIdentifier("model-id")
+                Button { refreshID += 1 } label: {
+                    HStack {
+                        Text(loading ? "正在获取在线型号…" : "刷新在线型号")
+                        Spacer()
+                        if loading { ProgressView() }
+                    }
+                }.disabled(loading || !discoveryInput.valid)
+                if let error { Text(error).font(.footnote).foregroundStyle(.secondary) }
+            } header: { Text("模型") } footer: { Text("列表以账号权限为准。不支持列表接口时，可手动输入型号。") }
+            Section {
+                TextField("API 接入地址", text: $configuration.endpoint)
+                    .textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
+                    .accessibilityIdentifier("model-endpoint")
                 Picker("接口协议", selection: $configuration.protocolKind) {
                     ForEach(ModelConfiguration.APIProtocol.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
-                TextField("接入地址（以 /v1 结尾）", text: $configuration.endpoint)
-                    .textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
-                SecureField("API Key", text: $key).textInputAutocapitalization(.never).autocorrectionDisabled()
-            } header: { Text("服务商") } footer: { Text("接入地址应为 API 基础地址，不包含 /chat/completions 或 /messages。") }
-            Section {
-                TextField("模型型号", text: $configuration.model).textInputAutocapitalization(.never).autocorrectionDisabled()
-                Button {
-                    loadTask?.cancel()
-                    loading = true; error = nil; models = []
-                    let snapshot = configuration
-                    let snapshotKey = key
-                    loadTask = Task {
-                        defer { loading = false }
-                        do {
-                            let result: [AvailableModel]
-                            if store.useRelay { result = try await RelayClient(baseURL: store.relayURL).models(configuration: snapshot, key: snapshotKey) }
-                            else { result = try await ProviderClient().models(configuration: snapshot, key: snapshotKey) }
-                            try Task.checkCancellation()
-                            models = result
-                            if result.isEmpty { error = "服务商未返回模型，可手动输入型号。" }
-                        } catch {
-                            if !Task.isCancelled { self.error = error.localizedDescription }
-                        }
-                    }
-                } label: { HStack { Text("获取在线模型列表"); Spacer(); if loading { ProgressView() } } }
-                    .disabled(loading || key.isEmpty)
-                if !models.isEmpty {
-                    Picker("选择在线模型", selection: $configuration.model) {
-                        Text("手动输入 / 当前型号").tag(configuration.model)
-                        ForEach(models.filter { $0.id != configuration.model }) { model in Text(model.name ?? model.id).tag(model.id) }
-                    }
-                }
-            } header: { Text("模型") } footer: { Text("在线列表以当前账号权限为准。不支持列表接口的服务商，可以手动输入型号。") }
-            if let error { Section { Text(error).foregroundStyle(.red) } }
+            } header: { Text("接口") } footer: { Text("预设地址可以修改。中国内地和国际站的 Key 及接口可能不同。") }
             if store.configurations.contains(where: { $0.id == configuration.id }), store.configurations.count > 1 {
                 Section { Button("移除此模型", role: .destructive) { deleteConfirmation = true } }
             }
@@ -137,12 +147,46 @@ struct ModelEditor: View {
                 }.disabled(store.isWorking)
             }
         }
-        .onAppear { key = store.key(for: configuration.id) }
-        .onDisappear { loadTask?.cancel() }
+        .onAppear {
+            key = store.key(for: configuration.id)
+            if configuration.name.isEmpty, let preset = ProviderPreset.matching(configuration) { configuration.name = preset.name }
+        }
+        .onChange(of: providerID) { _, id in
+            guard let preset = ProviderPreset.all.first(where: { $0.id == id }) else { return }
+            key = ""; models = []; error = nil
+            preset.apply(to: &configuration)
+        }
+        .task(id: DiscoveryRequest(input: discoveryInput, revision: refreshID)) { await discover() }
         .confirmationDialog("从新对话的模型列表中移除？已有对话会保留。", isPresented: $deleteConfirmation, titleVisibility: .visible) {
             Button("移除", role: .destructive) {
                 do { try store.removeConfiguration(configuration.id); dismiss() } catch { self.error = error.localizedDescription }
             }
         }
     }
+    private func discover(debounce: Bool = true) async {
+        let input = discoveryInput
+        models = []; loading = false; error = nil
+        guard input.valid else { return }
+        if debounce { try? await Task.sleep(for: .milliseconds(800)) }
+        guard !Task.isCancelled else { return }
+        loading = true
+        do {
+            var snapshot = configuration
+            snapshot.endpoint = input.endpoint
+            let result = try await store.discoverModels(configuration: snapshot, key: input.key)
+            try Task.checkCancellation()
+            guard input == discoveryInput else { return }
+            models = result
+            if configuration.model.isEmpty, let first = result.first { configuration.model = first.id }
+            if result.isEmpty { error = "服务商未返回模型，可手动输入型号。" }
+        } catch {
+            if !Task.isCancelled, input == discoveryInput { self.error = "未能获取在线列表：" + error.localizedDescription }
+        }
+        if !Task.isCancelled, input == discoveryInput { loading = false }
+    }
+}
+
+private struct DiscoveryRequest: Hashable {
+    let input: ModelDiscoveryInput
+    let revision: Int
 }

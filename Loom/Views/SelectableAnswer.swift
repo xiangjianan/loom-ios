@@ -71,7 +71,7 @@ struct SelectableAnswer: UIViewRepresentable {
             // Preserve every system action and its native presentation. Add one selection action.
             let range = ranges.first?.rangeValue ?? textView.selectedRange
             guard range.length > 0 else { return nil }
-            let marked = parent.highlights.contains { HighlightResolver.resolve($0, in: textView.attributedText.string)?.range == range }
+            let marked = parent.highlights.contains { HighlightResolver.resolve($0, in: textView.attributedText.string).map { NSIntersectionRange($0.range, range).length > 0 } == true }
             let highlight = UIAction(title: marked ? "取消高亮" : "高亮", image: UIImage(systemName: "highlighter")) { [weak self, weak textView] _ in
                 guard let self, let textView else { return }
                 self.commit(range, in: textView, toggle: marked)

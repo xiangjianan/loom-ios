@@ -6,6 +6,8 @@ struct WorkspaceView: View {
     @Bindable var store: LoomStore
     @State private var sheet: WorkspaceSheet?
     @State private var showNewConfirmation = false
+    @State private var readingChromeVisible = true
+    @State private var chromeChangedAt = Date.distantPast
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Namespace private var tabsNamespace
 
@@ -19,26 +21,35 @@ struct WorkspaceView: View {
                     else { phoneBoard }
                 }
                 .safeAreaInset(edge: .top, spacing: 0) {
-                    HStack(spacing: 8) {
-                        modelTabs
-                        Menu {
-                            Button("新对话", systemImage: "square.and.pencil") {
-                                if store.isWorking { showNewConfirmation = true } else { store.newConversation() }
+                    if readingChromeVisible {
+                        HStack(spacing: 8) {
+                            modelTabs
+                            Menu {
+                                Button("新对话", systemImage: "square.and.pencil") {
+                                    if store.isWorking { showNewConfirmation = true } else { store.newConversation() }
+                                }
+                                Button("历史对话", systemImage: "clock") { sheet = .history }
+                                Button("模型设置", systemImage: "slider.horizontal.3") { sheet = .settings }
+                            } label: {
+                                Image(systemName: "ellipsis").font(.headline).frame(width: 44, height: 44)
+                                    .glassEffect(.regular.interactive(), in: .circle)
                             }
-                            Button("历史对话", systemImage: "clock") { sheet = .history }
-                            Button("模型设置", systemImage: "slider.horizontal.3") { sheet = .settings }
-                        } label: {
-                            Image(systemName: "ellipsis").font(.headline).frame(width: 44, height: 44)
-                                .glassEffect(.regular.interactive(), in: .circle)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("更多操作").accessibilityIdentifier("workspace-menu")
-                        .padding(.trailing, 12)
-                    }.padding(.vertical, 4)
-
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("更多操作").accessibilityIdentifier("workspace-menu")
+                            .padding(.trailing, 12)
+                        }.padding(.vertical, 4)
+                        .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
+                    }
                 }
-                .safeAreaInset(edge: .bottom, spacing: 0) { ComposerView(store: store) }
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    if readingChromeVisible {
+                        ComposerView(store: store)
+                            .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+                    }
+                }
             }
+            .onChange(of: store.selectedModel) { _, _ in setReadingChrome(true) }
+            .onChange(of: store.selectedConversation) { _, _ in setReadingChrome(true) }
             .toolbar(.hidden, for: .navigationBar)
             .sheet(item: $sheet) { destination in
                 switch destination {
@@ -53,6 +64,20 @@ struct WorkspaceView: View {
                 Button("好", role: .cancel) { store.notice = nil }
             } message: { Text(store.notice ?? "") }
         }
+    }
+
+    private func setReadingChrome(_ visible: Bool) {
+        guard readingChromeVisible != visible else { return }
+        chromeChangedAt = Date()
+        withAnimation(reduceMotion ? .easeInOut(duration: 0.15) : .smooth(duration: 0.32)) {
+            readingChromeVisible = visible
+        }
+    }
+
+    private func readingScrolled(_ forward: Bool) {
+        // Ignore geometry changes caused by the bars' own transition.
+        guard Date().timeIntervalSince(chromeChangedAt) > 0.4 else { return }
+        setReadingChrome(!forward)
     }
 
     private var modelTabs: some View {
@@ -94,7 +119,7 @@ struct WorkspaceView: View {
     private var phoneBoard: some View {
         TabView(selection: $store.selectedModel) {
             ForEach(store.current.threads) { thread in
-                ThreadView(thread: thread, store: store).tag(thread.id)
+                ThreadView(thread: thread, store: store, onReadingScroll: readingScrolled).tag(thread.id)
             }
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
@@ -110,12 +135,15 @@ struct WorkspaceView: View {
             GlassEffectContainer(spacing: 16) {
             HStack(alignment: .top, spacing: 16) {
                 ForEach(store.current.threads) { thread in
-                    ThreadView(thread: thread, store: store)
+                    ThreadView(thread: thread, store: store, onReadingScroll: readingScrolled)
                         .frame(width: columnWidth).id(thread.id)
                 }
             }.padding(.horizontal, 24).padding(.top, 12)
             }
         }.scrollIndicators(.hidden)
+        .onScrollPhaseChange { _, phase in
+            if phase == .interacting { setReadingChrome(true) }
+        }
         .onChange(of: store.selectedModel) { _, id in
             withAnimation(reduceMotion ? nil : .snappy) { proxy.scrollTo(id, anchor: .center) }
         }
@@ -126,6 +154,9 @@ struct WorkspaceView: View {
 struct ThreadView: View {
     let thread: ModelThread
     var store: LoomStore
+    var onReadingScroll: (Bool) -> Void = { _ in }
+    @State private var scrollPhase: ScrollPhase = .idle
+    @State private var scrollTravel: CGFloat = 0
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -139,6 +170,24 @@ struct ThreadView: View {
                 }
                 .padding(.horizontal, 24).padding(.top, 20).padding(.bottom, 24)
                 .frame(maxWidth: 760, alignment: .leading).frame(maxWidth: .infinity)
+            }
+            .onScrollPhaseChange { _, phase in
+                scrollPhase = phase
+                if phase == .interacting { scrollTravel = 0 }
+            }
+            .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                let maximum = max(0, geometry.contentSize.height - geometry.containerSize.height + geometry.contentInsets.bottom)
+                return min(maximum, max(0, geometry.contentOffset.y))
+            } action: { old, new in
+                guard scrollPhase == .interacting else { return }
+                let delta = new - old
+                guard abs(delta) > 0.5 else { return }
+                if delta * scrollTravel < 0 { scrollTravel = 0 }
+                scrollTravel += delta
+                if abs(scrollTravel) > 24 {
+                    onReadingScroll(scrollTravel > 0)
+                    scrollTravel = 0
+                }
             }
             .scrollDismissesKeyboard(.interactively)
             .accessibilityIdentifier("thread-\(thread.configuration.name)")

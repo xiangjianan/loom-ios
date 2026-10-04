@@ -21,7 +21,7 @@ import UIKit
         let range = try XCTUnwrap(SentenceSelection.range(in: quoted, at: 3))
         XCTAssertEqual((quoted as NSString).substring(with: range), "‘这样很好！’")
     }
-    func testSentenceHighlightToggleDoesNotAffectOtherSentences() {
+    func testAdjacentSentenceHighlightsMergeAndToggleAsOne() {
         let store = LoomStore(fileURL: temporaryFile(), demo: true)
         XCTAssertTrue(store.singleTapHighlight)
         let thread = store.current.threads[0]
@@ -31,9 +31,32 @@ import UIKit
         let second = SentenceSelection.range(in: text as String, at: NSMaxRange(first) + 1)!
         store.toggleHighlight(threadID: thread.id, messageID: message.id, range: first, text: text.substring(with: first))
         store.toggleHighlight(threadID: thread.id, messageID: message.id, range: second, text: text.substring(with: second))
+        XCTAssertEqual(store.current.quotes.count, 1)
+        XCTAssertEqual(store.current.quotes[0].text, text.substring(with: NSUnionRange(first, second)))
         store.toggleHighlight(threadID: thread.id, messageID: message.id, range: first, text: text.substring(with: first))
-        XCTAssertEqual(store.current.quotes.map(\.text), [text.substring(with: second)])
-        XCTAssertEqual(store.current.threads[0].messages.first(where: { $0.id == message.id })!.highlights.map(\.range), [second])
+        XCTAssertTrue(store.current.quotes.isEmpty)
+        XCTAssertTrue(store.current.threads[0].messages.first(where: { $0.id == message.id })!.highlights.isEmpty)
+    }
+    func testBridgingHighlightsMergesBothNeighborsAndPreservesSeparateGroup() {
+        let store = LoomStore(fileURL: temporaryFile(), demo: true)
+        let thread = store.current.threads[0]
+        let message = thread.messages[1]
+        let text = AnswerRenderer.render(message.content).string as NSString
+        func toggle(_ start: Int, _ length: Int) {
+            let range = NSRange(location: start, length: length)
+            store.toggleHighlight(threadID: thread.id, messageID: message.id, range: range, text: text.substring(with: range))
+        }
+        toggle(4, 2)
+        toggle(0, 2)
+        toggle(9, 2)
+        XCTAssertEqual(store.current.quotes.count, 3)
+        toggle(2, 2)
+        XCTAssertEqual(store.current.quotes.count, 2)
+        XCTAssertTrue(store.current.quotes.contains { $0.text == text.substring(with: NSRange(location: 0, length: 6)) })
+        toggle(4, 2)
+        XCTAssertEqual(store.current.quotes.map(\.text), [text.substring(with: NSRange(location: 9, length: 2))])
+        store.removeQuote(store.current.quotes[0].id)
+        XCTAssertTrue(store.current.threads[0].messages[1].highlights.isEmpty)
     }
     func testSVGIsAnInlineAttachmentAndSurroundingTextRemainsSelectable() throws {
         let svg = #"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 200"><rect width="400" height="200" fill="blue"/><text x="10" y="40">SVG 图像</text></svg>"#

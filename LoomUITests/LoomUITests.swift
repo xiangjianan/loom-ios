@@ -141,6 +141,66 @@ import UIKit
         XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label == %@", originalLabel)).firstMatch.exists)
     }
 
+    func testTappingAdjacentHighlightsMergesAndCancelsWholeGroup() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--demo", "--demo-svg"]
+        app.launch()
+        let answer = app.textViews.firstMatch
+        XCTAssertTrue(answer.waitForExistence(timeout: 10))
+        func tap(_ x: CGFloat) {
+            answer.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: x, dy: 11)).tap()
+        }
+        tap(22)
+        XCTAssertTrue(app.staticTexts["第一句，"].waitForExistence(timeout: 5))
+        tap(110)
+        XCTAssertTrue(app.staticTexts["第一句，逗号、顿号和冒号："].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "移除引用：")).count, 1)
+        tap(110)
+        XCTAssertTrue(app.scrollViews["quote-tray"].waitForNonExistence(timeout: 5))
+    }
+
+    func testPadReadingScrollHidesAndRestoresChrome() throws {
+        try XCTSkipUnless(UIDevice.current.userInterfaceIdiom == .pad, "Parallel reading is an iPad interaction")
+        let app = XCUIApplication()
+        app.launchArguments = ["--demo", "--demo-long"]
+        app.launch()
+        let tab = app.buttons["model-tab-OpenAI"]
+        XCTAssertTrue(tab.waitForExistence(timeout: 10))
+        let scroll = app.scrollViews["thread-OpenAI"]
+        let height = scroll.frame.height
+        scroll.swipeUp()
+        XCTAssertTrue(tab.waitForNonExistence(timeout: 5))
+        XCTAssertGreaterThan(scroll.frame.height, height + 50)
+        scroll.swipeDown()
+        XCTAssertTrue(tab.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.textFields["prompt-field"].exists)
+    }
+
+    func testReadingScrollHidesChromeAndReverseOrModelSwipeRestoresIt() throws {
+        try XCTSkipIf(UIDevice.current.userInterfaceIdiom == .pad, "Model paging is an iPhone interaction")
+        let app = XCUIApplication()
+        app.launchArguments = ["--demo", "--demo-long"]
+        app.launch()
+        let tab = app.buttons["model-tab-OpenAI"]
+        XCTAssertTrue(tab.waitForExistence(timeout: 10))
+        let scroll = app.scrollViews["thread-OpenAI"]
+        let originalHeight = scroll.frame.height
+        scroll.swipeUp()
+        XCTAssertTrue(tab.waitForNonExistence(timeout: 5))
+        XCTAssertFalse(app.textFields["prompt-field"].exists)
+        XCTAssertGreaterThan(scroll.frame.height, originalHeight + 50)
+        let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.lifetime = .keepAlways; add(screenshot)
+        scroll.swipeDown()
+        XCTAssertTrue(tab.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.textFields["prompt-field"].exists)
+        scroll.swipeUp()
+        XCTAssertTrue(tab.waitForNonExistence(timeout: 5))
+        scroll.swipeLeft()
+        XCTAssertTrue(app.buttons["model-tab-Claude"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["model-tab-Claude"].isSelected)
+        XCTAssertTrue(app.textFields["prompt-field"].exists)
+    }
+
     func testDraggingSelectionHandleScrollsLongAnswer() {
         let app = XCUIApplication()
         app.launchArguments = ["--demo", "--demo-long"]

@@ -247,16 +247,36 @@ final class LoomStore {
                   let m = conversation.threads[t].messages.firstIndex(where: { $0.id == messageID }) else { return }
             let rendered = AnswerRenderer.render(conversation.threads[t].messages[m].content).string
             conversation.threads[t].messages[m].highlights = conversation.threads[t].messages[m].highlights.compactMap { HighlightResolver.resolve($0, in: rendered) }
-            let old = conversation.threads[t].messages[m].highlights.filter { $0.overlaps(range) }
-            // A selection expanded with the handles replaces overlapping highlights and quotes.
-            if old.count == 1, old[0].range == range { return }
-            let ids = Set(old.map(\.id))
-            conversation.threads[t].messages[m].highlights.removeAll { ids.contains($0.id) }
-            conversation.quotes.removeAll { ids.contains($0.id) }
-            let highlight = Highlight(location: range.location, length: range.length, text: text)
+            let source = rendered as NSString
+            guard range.location >= 0, NSMaxRange(range) <= source.length else { return }
+            var combined = range
+            var mergedIDs = Set<UUID>()
+            // Repeat so filling a gap joins both neighboring groups, regardless of insertion order.
+            var changed = true
+            while changed {
+                changed = false
+                for mark in conversation.threads[t].messages[m].highlights where !mergedIDs.contains(mark.id) {
+                    let gapStart = min(NSMaxRange(mark.range), NSMaxRange(combined))
+                    let gapEnd = max(mark.location, combined.location)
+                    let adjacent = gapEnd <= gapStart ||
+                        source.substring(with: NSRange(location: gapStart, length: gapEnd - gapStart))
+                            .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    if adjacent {
+                        combined = NSUnionRange(combined, mark.range)
+                        mergedIDs.insert(mark.id)
+                        changed = true
+                    }
+                }
+            }
+            if mergedIDs.count == 1,
+               conversation.threads[t].messages[m].highlights.contains(where: { mergedIDs.contains($0.id) && $0.range == combined }) { return }
+            conversation.threads[t].messages[m].highlights.removeAll { mergedIDs.contains($0.id) }
+            conversation.quotes.removeAll { mergedIDs.contains($0.id) }
+            let combinedText = source.substring(with: combined)
+            let highlight = Highlight(location: combined.location, length: combined.length, text: combinedText)
             conversation.threads[t].messages[m].highlights.append(highlight)
             let config = conversation.threads[t].configuration
-            conversation.quotes.append(Quote(id: highlight.id, text: text, modelName: config.name,
+            conversation.quotes.append(Quote(id: highlight.id, text: combinedText, modelName: config.name,
                                              model: config.model, round: conversation.threads[t].messages[m].round))
         }
         save()
@@ -265,7 +285,7 @@ final class LoomStore {
     func toggleHighlight(threadID: UUID, messageID: UUID, range: NSRange, text: String) {
         guard let message = current.threads.first(where: { $0.id == threadID })?.messages.first(where: { $0.id == messageID }) else { return }
         let rendered = AnswerRenderer.render(message.content).string
-        if let existing = message.highlights.compactMap({ HighlightResolver.resolve($0, in: rendered) }).first(where: { $0.range == range }) {
+        if let existing = message.highlights.compactMap({ HighlightResolver.resolve($0, in: rendered) }).first(where: { NSIntersectionRange($0.range, range).length > 0 }) {
             removeQuote(existing.id)
         } else {
             highlight(threadID: threadID, messageID: messageID, range: range, text: text)

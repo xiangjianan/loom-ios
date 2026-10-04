@@ -74,7 +74,9 @@ final class LoomStore {
 
     func key(for id: UUID) -> String { keychain.read(id) }
 
-    func saveConfiguration(_ configuration: ModelConfiguration, key: String) throws {
+    func saveConfiguration(_ updated: ModelConfiguration, key: String) throws {
+        var configuration = updated
+        let originalID = updated.id
         guard !isWorking else { throw RelayClient.ClientError(message: "请等待回答完成后再修改模型。") }
         guard let url = URL(string: configuration.endpoint), url.scheme == "https", url.host != nil,
               url.user == nil, url.password == nil, url.query == nil, url.fragment == nil else {
@@ -87,8 +89,14 @@ final class LoomStore {
         guard configurations.contains(where: { $0.id == configuration.id }) || configurations.count < 5 else {
             throw RelayClient.ClientError(message: "最多可配置五个模型。")
         }
+        // A provider change must never replace credentials used by archived provider threads.
+        if let old = configurations.first(where: { $0.id == originalID }),
+           (old.endpoint != configuration.endpoint || old.protocolKind != configuration.protocolKind),
+           conversations.contains(where: { $0.threads.contains(where: { $0.id == originalID && !$0.messages.isEmpty }) }) {
+            configuration.id = UUID()
+        }
         try keychain.write(key, for: configuration.id)
-        if let index = configurations.firstIndex(where: { $0.id == configuration.id }) {
+        if let index = configurations.firstIndex(where: { $0.id == originalID }) {
             configurations[index] = configuration
         } else {
             guard configurations.count < 5 else { throw RelayClient.ClientError(message: "最多可配置五个模型。") }
@@ -96,11 +104,11 @@ final class LoomStore {
         }
         // Existing conversation model identity stays immutable once messages exist.
         mutateCurrent { conversation in
-            if let index = conversation.threads.firstIndex(where: { $0.id == configuration.id }) {
+            if let index = conversation.threads.firstIndex(where: { $0.id == originalID }) {
                 if conversation.threads[index].messages.isEmpty { conversation.threads[index].configuration = configuration }
             } else if conversation.round == 0 { conversation.threads.append(ModelThread(configuration: configuration)) }
         }
-        save()
+        ensureSelection(); save()
     }
 
     func removeConfiguration(_ id: UUID) throws {

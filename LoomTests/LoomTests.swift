@@ -9,6 +9,27 @@ import XCTest
         return URLSession(configuration: config)
     }
 
+    func testChangingProviderPreservesArchivedCredentials() throws {
+        let store = LoomStore(fileURL: temporaryFile(), demo: true)
+        let originalID = store.configurations[0].id
+        defer {
+            for id in Set(store.configurations.map(\.id) + [originalID]) { try? KeychainStore().write("", for: id) }
+        }
+        var configuration = store.configurations[0]
+        configuration.model = "old-model"
+        try store.saveConfiguration(configuration, key: "old-provider-key")
+        ProviderPreset.all.first(where: { $0.id == "deepseek" })!.apply(to: &configuration)
+        configuration.model = "new-model"
+        try store.saveConfiguration(configuration, key: "new-provider-key")
+        let newID = store.configurations[0].id
+        XCTAssertNotEqual(newID, originalID)
+        XCTAssertEqual(store.key(for: originalID), "old-provider-key")
+        XCTAssertEqual(store.key(for: newID), "new-provider-key")
+        XCTAssertEqual(store.current.threads[0].id, originalID)
+        store.newConversation()
+        XCTAssertEqual(store.current.threads[0].id, newID)
+    }
+
     func testProviderPresetsFillEndpointAndProtocol() {
         for preset in ProviderPreset.all {
             var configuration = ModelConfiguration(name: "Old", endpoint: "https://old.example", model: "old-model")

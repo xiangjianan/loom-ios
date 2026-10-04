@@ -48,10 +48,14 @@ struct SettingsView: View {
                     Text(store.useRelay ? "模型请求包含 API Key、对话上下文和引用，经转发服务发送给所选服务商。请使用可信任的转发服务。" : "默认直接连接模型服务商，不经过 Loom 后端。API Key、对话上下文和引用会发送给你配置的服务商。")
                 }
                 Section {
+                    Picker("整段快捷高亮", selection: $store.singleTapHighlight) {
+                        Text("双击段落").tag(false)
+                        Text("单击段落").tag(true)
+                    }.pickerStyle(.menu).accessibilityIdentifier("paragraph-highlight-mode").onChange(of: store.singleTapHighlight) { _, _ in store.save() }
                     Button("清除当前对话的所有高亮", role: .destructive) { clearConfirmation = true }
-                } header: { Text("阅读") }
+                } header: { Text("阅读") } footer: { Text("长按选择文字后，点菜单中的‘高亮’。快捷操作可高亮整段；默认双击，减少阅读时的误触。移除引用标签也会取消对应高亮。") }
                 Section {
-                    LabeledContent("版本", value: "1.1.1")
+                    LabeledContent("版本", value: "1.1.2")
                     Text("Loom 让多个模型的观点交织，帮助你继续思考。对话与高亮保存在本地，暂不与网页或其他设备同步。")
                         .font(.footnote).foregroundStyle(.secondary)
                     Link("项目源码", destination: URL(string: "https://github.com/xiangjianan/loom-ios")!)

@@ -69,6 +69,7 @@ struct SavedState: Codable {
     var selectedConversation: UUID?
     var relayURL: String
     var useRelay: Bool? = nil
+    var singleTapHighlight: Bool? = nil
 }
 
 struct APIMessage: Codable, Equatable, Sendable {

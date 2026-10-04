@@ -10,6 +10,23 @@ import UIKit
         return URLSession(configuration: config)
     }
 
+    func testRemovingQuoteRemovesOnlyItsOriginalHighlight() {
+        let store = LoomStore(fileURL: temporaryFile(), demo: true)
+        let thread = store.current.threads[0]
+        let message = thread.messages.first(where: { $0.role == "assistant" })!
+        let text = AnswerRenderer.render(message.content).string as NSString
+        let first = NSRange(location: 0, length: 2)
+        let second = NSRange(location: 3, length: 2)
+        store.highlight(threadID: thread.id, messageID: message.id, range: first, text: text.substring(with: first))
+        store.highlight(threadID: thread.id, messageID: message.id, range: second, text: text.substring(with: second))
+        let quotes = store.current.quotes
+        XCTAssertEqual(quotes.count, 2)
+        store.removeQuote(quotes[0].id)
+        let marks = store.current.threads[0].messages.first(where: { $0.id == message.id })!.highlights
+        XCTAssertEqual(marks.map(\.id), [quotes[1].id])
+        XCTAssertEqual(store.current.quotes.map(\.id), [quotes[1].id])
+    }
+
     func testChangingProviderPreservesArchivedCredentials() throws {
         let store = LoomStore(fileURL: temporaryFile(), demo: true)
         let originalID = store.configurations[0].id

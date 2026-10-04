@@ -46,15 +46,52 @@ import UIKit
         XCUIDevice.shared.orientation = .portrait
     }
 
-    func testSelectingTextAutomaticallyAddsQuote() throws {
+    func testSelectionRequiresMenuAndRemovingQuote() throws {
         let app = XCUIApplication()
         app.launchArguments = ["--demo"]
         app.launch()
         let answer = app.textViews.firstMatch
         XCTAssertTrue(answer.waitForExistence(timeout: 10))
         answer.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.04)).press(forDuration: 1.2)
+        XCTAssertFalse(app.scrollViews["quote-tray"].exists)
+        let highlight = app.buttons["高亮"]
+        XCTAssertTrue(highlight.waitForExistence(timeout: 5))
+        highlight.tap()
+        XCTAssertTrue(app.scrollViews["quote-tray"].waitForExistence(timeout: 5))
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "移除引用：")).firstMatch.tap()
+        XCTAssertFalse(app.scrollViews["quote-tray"].exists)
+    }
+    func testDoubleTapHighlightsParagraph() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--demo"]
+        app.launch()
+        let answer = app.textViews.firstMatch
+        XCTAssertTrue(answer.waitForExistence(timeout: 10))
+        answer.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.04)).doubleTap()
+        XCTAssertTrue(app.scrollViews["quote-tray"].waitForExistence(timeout: 5))
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "移除引用：")).firstMatch.tap()
+        XCTAssertFalse(app.scrollViews["quote-tray"].exists)
+    }
+    func testSingleTapParagraphHighlightSetting() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--demo"]
+        app.launch()
+        let answer = app.textViews.firstMatch
+        XCTAssertTrue(answer.waitForExistence(timeout: 10))
+        answer.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.04)).tap()
+        XCTAssertFalse(app.scrollViews["quote-tray"].exists)
+        app.buttons["workspace-menu"].tap()
+        app.buttons["模型设置"].tap()
+        app.swipeUp()
+        let mode = app.buttons["paragraph-highlight-mode"]
+        XCTAssertTrue(mode.waitForExistence(timeout: 5))
+        mode.tap()
+        app.buttons["单击段落"].tap()
+        app.buttons["完成"].tap()
+        answer.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.04)).tap()
         XCTAssertTrue(app.scrollViews["quote-tray"].waitForExistence(timeout: 5))
     }
+
     func testComposerExpandsAndKeepsSendAtBottom() {
         let app = XCUIApplication()
         app.launchArguments = ["--demo"]
@@ -99,6 +136,10 @@ import UIKit
         XCTAssertTrue(answer.waitForExistence(timeout: 10))
         XCTAssertFalse(answer.value.debugDescription.contains("# 从一个"))
         answer.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.04)).press(forDuration: 1.2)
+        XCTAssertFalse(app.scrollViews["quote-tray"].exists)
+        let highlight = app.buttons["高亮"]
+        XCTAssertTrue(highlight.waitForExistence(timeout: 5))
+        highlight.tap()
         XCTAssertTrue(app.scrollViews["quote-tray"].waitForExistence(timeout: 5))
     }
 

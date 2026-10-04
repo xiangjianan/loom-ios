@@ -207,7 +207,7 @@ private struct MessageView: View {
                     .font(.body).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
                     .padding(16).background(.indigo.opacity(0.07), in: .rect(cornerRadius: 18))
             } else {
-                SelectableAnswer(content: message.content, highlights: message.highlights) { range, text in
+                SelectableAnswer(content: message.content, highlights: message.highlights, singleTapHighlight: store.singleTapHighlight) { range, text in
                     store.highlight(threadID: thread.id, messageID: message.id, range: range, text: text)
                 }.frame(maxWidth: .infinity, alignment: .leading)
             }

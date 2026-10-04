@@ -8,6 +8,7 @@ final class LoomStore {
     var selectedConversation: UUID
     var selectedModel: UUID
     var relayURL: String
+    var singleTapHighlight: Bool
     var useRelay: Bool
     var notice: String?
     private(set) var busyModels: Set<UUID> = []
@@ -45,6 +46,7 @@ final class LoomStore {
         let configs = state?.configurations.isEmpty == false ? state!.configurations : ModelConfiguration.defaults
         configurations = configs
         relayURL = state?.relayURL ?? RelayClient.defaultURL
+        singleTapHighlight = state?.singleTapHighlight ?? false
         useRelay = state?.useRelay ?? false
         let initial = Conversation(threads: configs.map { ModelThread(configuration: $0) })
         let loaded = state?.conversations.isEmpty == false ? state!.conversations : [initial]
@@ -258,7 +260,17 @@ final class LoomStore {
         save()
     }
 
-    func removeQuote(_ id: UUID) { mutateCurrent { $0.quotes.removeAll { $0.id == id } }; save() }
+    func removeQuote(_ id: UUID) {
+        mutateCurrent { conversation in
+            conversation.quotes.removeAll { $0.id == id }
+            for t in conversation.threads.indices {
+                for m in conversation.threads[t].messages.indices {
+                    conversation.threads[t].messages[m].highlights.removeAll { $0.id == id }
+                }
+            }
+        }
+        save()
+    }
     func clearHighlights() {
         mutateCurrent { conversation in
             conversation.quotes = []
@@ -287,7 +299,7 @@ final class LoomStore {
         do {
             try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
             let data = try JSONEncoder().encode(SavedState(configurations: configurations, conversations: conversations,
-                                                          selectedConversation: selectedConversation, relayURL: relayURL, useRelay: useRelay))
+                                                          selectedConversation: selectedConversation, relayURL: relayURL, useRelay: useRelay, singleTapHighlight: singleTapHighlight))
             try data.write(to: fileURL, options: [.atomic, .completeFileProtection])
         } catch { notice = "本地保存失败：\(error.localizedDescription)" }
     }

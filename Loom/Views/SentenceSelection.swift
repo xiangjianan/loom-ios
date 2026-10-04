@@ -14,7 +14,7 @@ enum SentenceSelection {
         while i < characters.count {
             let character = characters[i]
             cursor += String(character).utf16.count
-            var terminal = "。！？!?…".contains(character)
+            var terminal = "。！？!?…，,：:；;".contains(character)
             if character == "." {
                 let previous = i > 0 ? characters[i - 1] : " "
                 let next = i + 1 < characters.count ? characters[i + 1] : " "
@@ -22,7 +22,7 @@ enum SentenceSelection {
                 terminal = !(previous.isNumber && next.isNumber) && (next.isWhitespace || next == "." || i + 1 == characters.count || "\"'”’」』）)]".contains(next))
             }
             if terminal {
-                while i + 1 < characters.count, "。！？!?…．.\"'”’」』）)]".contains(characters[i + 1]) {
+                while i + 1 < characters.count, "。！？!?…，,：:；;．.\"'”’」』）)]".contains(characters[i + 1]) {
                     i += 1; cursor += String(characters[i]).utf16.count
                 }
                 let candidate = trimmed(NSRange(location: start, length: cursor - start), in: string)

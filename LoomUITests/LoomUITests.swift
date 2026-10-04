@@ -112,7 +112,7 @@ import UIKit
         let point = answer.coordinate(withNormalizedOffset: CGVector(dx: 0.18, dy: 0.025))
         point.tap()
         XCTAssertTrue(app.scrollViews["quote-tray"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["第一句，逗号、顿号和冒号：都留在一句里。"].exists)
+        XCTAssertTrue(app.staticTexts["第一句，"].exists)
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.lifetime = .keepAlways; add(screenshot)
     }
 
@@ -125,16 +125,19 @@ import UIKit
         let row = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "history-row-")).firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 5))
         let originalLabel = row.label
-        row.swipeLeft()
-        app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "history-delete-")).firstMatch.tap()
-        XCTAssertTrue(app.buttons["cancel-delete"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["confirm-delete"].exists)
+        let start = row.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5))
+        let end = row.coordinate(withNormalizedOffset: CGVector(dx: 0.02, dy: 0.5))
+        start.press(forDuration: 0.05, thenDragTo: end)
+        let alert = app.alerts.firstMatch
+        XCTAssertTrue(alert.waitForExistence(timeout: 5))
+        XCTAssertTrue(alert.buttons["取消"].exists)
+        XCTAssertTrue(alert.buttons["删除"].exists)
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.lifetime = .keepAlways; add(screenshot)
-        app.buttons["cancel-delete"].tap()
+        alert.buttons["取消"].tap()
         XCTAssertEqual(row.label, originalLabel)
-        row.swipeLeft()
-        app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "history-delete-")).firstMatch.tap()
-        app.buttons["confirm-delete"].tap()
+        start.press(forDuration: 0.05, thenDragTo: end)
+        XCTAssertTrue(alert.waitForExistence(timeout: 5))
+        alert.buttons["删除"].tap()
         XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label == %@", originalLabel)).firstMatch.exists)
     }
 

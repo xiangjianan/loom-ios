@@ -11,15 +11,15 @@ import UIKit
     }
 
     func testSentenceRangesUseTerminalPunctuationAndPreserveUnicode() throws {
-        let text = "第一句，包含逗号、顿号：仍是同一句。第二句！第三句？\nEmoji 👨‍👩‍👧‍👦 和数字 3.14，同一句。 One sentence, with a colon: yes. Next!"
+        let text = "第一句，包含逗号、顿号：分号前；分号后。第二句！第三句？\nEmoji 👨‍👩‍👧‍👦 和数字 3.14，同一句。 One sentence, with a colon: yes; after. Next!"
         let string = text as NSString
-        for (word, expected) in [("包含", "第一句，包含逗号、顿号：仍是同一句。"), ("第二", "第二句！"), ("第三", "第三句？"), ("数字", "Emoji 👨‍👩‍👧‍👦 和数字 3.14，同一句。"), ("colon", "One sentence, with a colon: yes."), ("Next", "Next!")] {
+        for (word, expected) in [("包含", "包含逗号、顿号："), ("顿号", "包含逗号、顿号："), ("分号前", "分号前；"), ("分号后", "分号后。"), ("第二", "第二句！"), ("第三", "第三句？"), ("数字", "Emoji 👨‍👩‍👧‍👦 和数字 3.14，"), ("sentence", "One sentence,"), ("colon", "with a colon:"), ("yes", "yes;"), ("after", "after."), ("Next", "Next!")] {
             let range = try XCTUnwrap(SentenceSelection.range(in: text, at: string.range(of: word).location))
             XCTAssertEqual(string.substring(with: range), expected)
         }
         let quoted = "他说：‘这样很好！’下一句。"
         let range = try XCTUnwrap(SentenceSelection.range(in: quoted, at: 3))
-        XCTAssertEqual((quoted as NSString).substring(with: range), "他说：‘这样很好！’")
+        XCTAssertEqual((quoted as NSString).substring(with: range), "‘这样很好！’")
     }
     func testSentenceHighlightToggleDoesNotAffectOtherSentences() {
         let store = LoomStore(fileURL: temporaryFile(), demo: true)

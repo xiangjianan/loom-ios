@@ -3,7 +3,7 @@ import Foundation
 // Local UI fixtures, selected only with --demo. They never enter the user's saved history.
 enum ReadingPreview {
     static let svg = #"""
-    第一句，逗号、顿号和冒号：都留在一句里。第二句可以独立高亮！第三句也可以吗？
+    第一句，逗号、顿号和冒号：现在按标点分割。第二句可以独立高亮！第三句也可以吗？
 
     ```svg
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 300">

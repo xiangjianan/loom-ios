@@ -171,6 +171,13 @@ import UIKit
         scroll.swipeUp()
         XCTAssertTrue(tab.waitForNonExistence(timeout: 5))
         XCTAssertGreaterThan(scroll.frame.height, height + 50)
+        // Native paging may inset the frame at rounded screen corners. Reading must
+        // extend into the status-bar band and reach the bottom edge.
+        let fullScreen = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            scroll.frame.minY < app.frame.minY + app.frame.height * 0.05 && scroll.frame.maxY >= app.frame.maxY - 1
+        }, object: scroll)
+        XCTAssertEqual(XCTWaiter.wait(for: [fullScreen], timeout: 5), .completed, "Reading viewport: \(scroll.frame); screen: \(app.frame)")
+        let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.lifetime = .keepAlways; add(screenshot)
         scroll.swipeDown()
         XCTAssertTrue(tab.waitForExistence(timeout: 5))
         XCTAssertTrue(app.textFields["prompt-field"].exists)
@@ -189,6 +196,12 @@ import UIKit
         XCTAssertTrue(tab.waitForNonExistence(timeout: 5))
         XCTAssertFalse(app.textFields["prompt-field"].exists)
         XCTAssertGreaterThan(scroll.frame.height, originalHeight + 50)
+        // Native paging may inset the frame at rounded screen corners. Reading must
+        // extend into the status-bar band and reach the bottom edge.
+        let fullScreen = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            scroll.frame.minY < app.frame.minY + app.frame.height * 0.05 && scroll.frame.maxY >= app.frame.maxY - 1
+        }, object: scroll)
+        XCTAssertEqual(XCTWaiter.wait(for: [fullScreen], timeout: 5), .completed, "Reading viewport: \(scroll.frame); screen: \(app.frame)")
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.lifetime = .keepAlways; add(screenshot)
         scroll.swipeDown()
         XCTAssertTrue(tab.waitForExistence(timeout: 5))

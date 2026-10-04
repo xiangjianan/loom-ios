@@ -20,6 +20,25 @@ struct WorkspaceView: View {
                     if parallel { parallelBoard(width: geometry.size.width) }
                     else { phoneBoard }
                 }
+                .ignoresSafeArea(.container, edges: readingChromeVisible ? [] : .vertical)
+                .overlay(alignment: .top) {
+                    if !readingChromeVisible {
+                        Rectangle()
+                            .fill(.ultraThinMaterial)
+                            .frame(height: geometry.safeAreaInsets.top + 16)
+                            .mask {
+                                LinearGradient(stops: [
+                                    .init(color: .black, location: 0),
+                                    .init(color: .black, location: 0.75),
+                                    .init(color: .clear, location: 1)
+                                ], startPoint: .top, endPoint: .bottom)
+                            }
+                            .offset(y: -geometry.safeAreaInsets.top)
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
+                            .transition(.opacity)
+                    }
+                }
                 .safeAreaInset(edge: .top, spacing: 0) {
                     if readingChromeVisible {
                         HStack(spacing: 8) {
@@ -119,7 +138,8 @@ struct WorkspaceView: View {
     private var phoneBoard: some View {
         TabView(selection: $store.selectedModel) {
             ForEach(store.current.threads) { thread in
-                ThreadView(thread: thread, store: store, onReadingScroll: readingScrolled).tag(thread.id)
+                ThreadView(thread: thread, store: store, onReadingScroll: readingScrolled)
+                    .tag(thread.id)
             }
         }
         .tabViewStyle(.page(indexDisplayMode: .never))

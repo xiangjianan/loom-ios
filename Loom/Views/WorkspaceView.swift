@@ -4,6 +4,7 @@ private enum WorkspaceSheet: String, Identifiable { case settings, history; var 
 
 struct WorkspaceView: View {
     @Bindable var store: LoomStore
+    @State private var readingOffsets: [UUID: [UUID: CGFloat]] = [:]
     @State private var sheet: WorkspaceSheet?
     @State private var showNewConfirmation = false
     @State private var readingChromeVisible = true
@@ -85,6 +86,14 @@ struct WorkspaceView: View {
         }
     }
 
+    private func readingOffset(for threadID: UUID) -> Binding<CGFloat> {
+        let conversationID = store.selectedConversation
+        return Binding(
+            get: { readingOffsets[conversationID]?[threadID] ?? 0 },
+            set: { readingOffsets[conversationID, default: [:]][threadID] = $0 }
+        )
+    }
+
     private func setReadingChrome(_ visible: Bool) {
         guard readingChromeVisible != visible else { return }
         chromeChangedAt = Date()
@@ -138,7 +147,7 @@ struct WorkspaceView: View {
     private var phoneBoard: some View {
         TabView(selection: $store.selectedModel) {
             ForEach(store.current.threads) { thread in
-                ThreadView(thread: thread, store: store, onReadingScroll: readingScrolled)
+                ThreadView(thread: thread, store: store, savedOffset: readingOffset(for: thread.id), isActive: store.selectedModel == thread.id, onReadingScroll: readingScrolled)
                     .tag(thread.id)
             }
         }
@@ -155,7 +164,7 @@ struct WorkspaceView: View {
             GlassEffectContainer(spacing: 16) {
             HStack(alignment: .top, spacing: 16) {
                 ForEach(store.current.threads) { thread in
-                    ThreadView(thread: thread, store: store, onReadingScroll: readingScrolled)
+                    ThreadView(thread: thread, store: store, savedOffset: readingOffset(for: thread.id), isActive: true, onReadingScroll: readingScrolled)
                         .frame(width: columnWidth).id(thread.id)
                 }
             }.padding(.horizontal, 24).padding(.top, 12)
@@ -171,85 +180,11 @@ struct WorkspaceView: View {
     }
 }
 
-struct ThreadView: View {
-    let thread: ModelThread
-    var store: LoomStore
-    var onReadingScroll: (Bool) -> Void = { _ in }
-    @State private var scrollPhase: ScrollPhase = .idle
-    @State private var scrollTravel: CGFloat = 0
-
-    var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 24) {
-                    if thread.messages.isEmpty { emptyState }
-                    ForEach(thread.messages) { message in
-                        MessageView(message: message, thread: thread, store: store).id(message.id)
-                    }
-                    Color.clear.frame(height: 1).id("end")
-                }
-                .padding(.horizontal, 24).padding(.top, 20).padding(.bottom, 24)
-                .frame(maxWidth: 760, alignment: .leading).frame(maxWidth: .infinity)
-            }
-            .onScrollPhaseChange { _, phase in
-                scrollPhase = phase
-                if phase == .interacting { scrollTravel = 0 }
-            }
-            .onScrollGeometryChange(for: CGFloat.self) { geometry in
-                let maximum = max(0, geometry.contentSize.height - geometry.containerSize.height + geometry.contentInsets.bottom)
-                return min(maximum, max(0, geometry.contentOffset.y))
-            } action: { old, new in
-                guard scrollPhase == .interacting else { return }
-                let delta = new - old
-                guard abs(delta) > 0.5 else { return }
-                if delta * scrollTravel < 0 { scrollTravel = 0 }
-                scrollTravel += delta
-                if abs(scrollTravel) > 24 {
-                    onReadingScroll(scrollTravel > 0)
-                    scrollTravel = 0
-                }
-            }
-            .scrollDismissesKeyboard(.interactively)
-            .accessibilityIdentifier("thread-\(thread.configuration.name)")
-            .overlay(alignment: .topTrailing) {
-                if store.current.round > 1 {
-                    Menu {
-                        ForEach(1...store.current.round, id: \.self) { round in
-                            Button("第 \(round) 轮") {
-                                if let message = thread.messages.first(where: { $0.round == round }) {
-                                    proxy.scrollTo(message.id, anchor: .top)
-                                }
-                            }
-                        }
-                        Button("最新回答") { proxy.scrollTo("end", anchor: .bottom) }
-                    } label: { Image(systemName: "list.bullet").frame(width: 40, height: 40) }
-                    .buttonStyle(.glass).padding(12).accessibilityLabel("轮次导航")
-                }
-            }
-            .onChange(of: thread.messages.count) { _, _ in proxy.scrollTo("end", anchor: .bottom) }
-        }
-    }
-    private var emptyState: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Image(systemName: "square.stack.3d.up").font(.system(size: 34, weight: .light)).foregroundStyle(.indigo)
-                .padding(.top, 50)
-            Text("让不同的观点\n在这里交织。")
-                .font(.system(.largeTitle, design: .rounded, weight: .semibold))
-            Text("一次提问，同时听见多个模型的回答。\n选中有用的文字，带着它继续思考。")
-                .font(.body).foregroundStyle(.secondary).lineSpacing(6)
-            Label(thread.configuration.name, systemImage: "sparkle").font(.subheadline.weight(.medium)).foregroundStyle(.indigo)
-            if thread.configuration.model.isEmpty {
-                Text("开始前，请点右上角设置，填写模型型号和 API Key。")
-                    .font(.footnote).foregroundStyle(.secondary).padding(.top, 12)
-            }
-        }.padding(.bottom, 30).frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-private struct MessageView: View {
+struct MessageView: View {
     let message: ChatMessage
     let thread: ModelThread
     var store: LoomStore
+    @State private var referencesExpanded = false
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
@@ -275,6 +210,27 @@ private struct MessageView: View {
                 Text(message.display ?? message.content)
                     .font(.body).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
                     .padding(16).background(.indigo.opacity(0.07), in: .rect(cornerRadius: 18))
+                if let references = message.references, !references.isEmpty {
+                    DisclosureGroup(isExpanded: $referencesExpanded) {
+                        VStack(alignment: .leading, spacing: 12) {
+                            ForEach(references) { quote in
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("\(quote.modelName) · 第 \(quote.round) 轮")
+                                        .font(.caption.weight(.medium)).foregroundStyle(.secondary)
+                                    Text(quote.text).font(.subheadline).textSelection(.enabled)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(12).background(.yellow.opacity(0.12), in: .rect(cornerRadius: 12))
+                            }
+                        }.padding(.top, 8)
+                    } label: {
+                        Label("高亮引用（\(references.count)）", systemImage: "highlighter")
+                            .font(.subheadline)
+                    }
+                    .tint(.secondary)
+                    .accessibilityIdentifier("message-references-\(message.round)")
+                }
+
             } else {
                 SelectableAnswer(content: message.content, highlights: message.highlights, singleTapHighlight: store.singleTapHighlight) { range, text, toggle in
                     if toggle { store.toggleHighlight(threadID: thread.id, messageID: message.id, range: range, text: text) }

@@ -175,6 +175,67 @@ import UIKit
         XCTAssertEqual(Conversation.prompt("问题", quotes: []), "问题")
     }
 
+    func testSentHighlightReferencesAreSnapshotsAndPersistInHistory() async throws {
+        let file = temporaryFile()
+        let store = LoomStore(fileURL: file, session: makeSession())
+        let ids = store.configurations.map(\.id)
+        defer {
+            store.cancelAll()
+            for id in ids { try? KeychainStore().write("", for: id) }
+            try? FileManager.default.removeItem(at: file.deletingLastPathComponent())
+        }
+        for var config in store.configurations {
+            config.model = "success"
+            try store.saveConfiguration(config, key: "test-secret")
+        }
+        store.draft = "第一轮"
+        store.send()
+        for _ in 0..<100 where store.isWorking { try await Task.sleep(for: .milliseconds(20)) }
+        let thread = store.current.threads[0]
+        let answer = try XCTUnwrap(thread.messages.last)
+        store.highlight(threadID: thread.id, messageID: answer.id, range: NSRange(location: 0, length: 2), text: "模拟")
+        let snapshot = store.current.quotes[0]
+        store.draft = "继续"
+        store.send()
+        XCTAssertTrue(store.current.quotes.isEmpty)
+        store.removeQuote(snapshot.id)
+        for _ in 0..<100 where store.isWorking { try await Task.sleep(for: .milliseconds(20)) }
+        let restored = LoomStore(fileURL: file)
+        for thread in restored.current.threads {
+            let sent = try XCTUnwrap(thread.messages.first { $0.role == "user" && $0.round == 2 })
+            XCTAssertEqual(sent.references?.map(\.id), [snapshot.id])
+            XCTAssertEqual(sent.references?.map(\.text), ["模拟"])
+            XCTAssertEqual(sent.display, "继续")
+            XCTAssertTrue(sent.content.contains("模拟"))
+            XCTAssertNil(thread.messages.first?.references)
+        }
+    }
+
+    func testOldMessagesWithoutReferencesStillDecode() throws {
+        let json = #"{"id":"2BB58C1C-30B5-45FD-B444-857D7608C444","role":"user","content":"旧消息","round":1,"highlights":[],"error":false,"pending":false}"#
+        let message = try JSONDecoder().decode(ChatMessage.self, from: Data(json.utf8))
+        XCTAssertNil(message.references)
+        XCTAssertEqual(message.content, "旧消息")
+    }
+
+    func testLegacySentReferencesRecoverWithSourceAndRound() throws {
+        let original = [
+            Quote(id: UUID(), text: "第一段参考。\n第二行内容。", modelName: "OpenAI", model: "model-a", round: 1),
+            Quote(id: UUID(), text: "另一个模型的观点。", modelName: "Claude", model: "model-b", round: 2)
+        ]
+        var message = ChatMessage(role: "user", content: Conversation.prompt("继续", quotes: original), display: "继续", round: 3)
+        message.recoverSentReferences()
+        XCTAssertEqual(message.references?.map(\.text), original.map(\.text))
+        XCTAssertEqual(message.references?.map(\.modelName), original.map(\.modelName))
+        XCTAssertEqual(message.references?.map(\.round), [1, 2])
+        let ids = message.references?.map(\.id)
+        message.recoverSentReferences()
+        XCTAssertEqual(message.references?.map(\.id), ids)
+        var normal = ChatMessage(role: "user", content: message.content, round: 3)
+        normal.recoverSentReferences()
+        XCTAssertNil(normal.references)
+    }
+
     func testFullMarkdownStructureAndStyling() throws {
         let rendered = AnswerRenderer.render(MarkdownPreview.content)
         XCTAssertTrue(rendered.string.contains("从一个想法开始\n"))

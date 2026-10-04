@@ -59,6 +59,9 @@ final class LoomStore {
         canSave = loadError == nil
         for c in conversations.indices {
             for t in conversations[c].threads.indices {
+                for m in conversations[c].threads[t].messages.indices {
+                    conversations[c].threads[t].messages[m].recoverSentReferences()
+                }
                 for m in conversations[c].threads[t].messages.indices where conversations[c].threads[t].messages[m].pending {
                     conversations[c].threads[t].messages[m].pending = false
                     conversations[c].threads[t].messages[m].error = true
@@ -72,6 +75,21 @@ final class LoomStore {
                 mutateCurrent { $0.threads[0].messages[1].content = MarkdownPreview.content }
             }
             if ProcessInfo.processInfo.arguments.contains("--demo-svg") { mutateCurrent { $0.threads[0].messages[1].content = ReadingPreview.svg } }
+            if ProcessInfo.processInfo.arguments.contains("--demo-rounds") {
+                mutateCurrent { conversation in
+                    conversation.round = 4
+                    for index in conversation.threads.indices {
+                        let config = conversation.threads[index].configuration
+                        conversation.threads[index].messages = (1...4).flatMap { round in
+                            let quote = Quote(id: UUID(), text: "这是上一轮保留的高亮观点。", modelName: config.name, model: config.model, round: round - 1)
+                            return [
+                                ChatMessage(role: "user", content: "继续讨论第\(round)轮的问题", display: "继续讨论第\(round)轮的问题", references: round > 1 ? [quote] : nil, round: round),
+                                ChatMessage(role: "assistant", content: (1...10).map { "第\(round)轮 · 第\($0)段：这是一段可滚动的多轮回答。每个模型应该记住自己的阅读位置，轮次标记可以直接跳转。" }.joined(separator: "\n\n"), round: round)
+                            ]
+                        }
+                    }
+                }
+            }
             if ProcessInfo.processInfo.arguments.contains("--demo-long") { mutateCurrent { $0.threads[0].messages[1].content = ReadingPreview.long } }
         }
     }
@@ -165,14 +183,15 @@ final class LoomStore {
                 return
             }
         }
-        let content = Conversation.prompt(text, quotes: current.quotes)
+        let references = current.quotes
+        let content = Conversation.prompt(text, quotes: references)
         mutateCurrent { conversation in
             conversation.round += 1
             if conversation.round == 1 { conversation.title = String(text.prefix(60)) }
             conversation.draft = ""
             conversation.quotes = []
             for index in conversation.threads.indices {
-                conversation.threads[index].messages.append(ChatMessage(role: "user", content: content, display: text, round: conversation.round))
+                conversation.threads[index].messages.append(ChatMessage(role: "user", content: content, display: text, references: references.isEmpty ? nil : references, round: conversation.round))
             }
         }
         for thread in current.threads { startRequest(threadID: thread.id) }

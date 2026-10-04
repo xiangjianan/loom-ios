@@ -116,6 +116,69 @@ import UIKit
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.lifetime = .keepAlways; add(screenshot)
     }
 
+    func testRoundTicksTapScrubAndExpandSentReferences() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--demo", "--demo-rounds"]
+        app.launch()
+        let scroll = app.scrollViews["thread-OpenAI"]
+        XCTAssertTrue(scroll.waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["轮次导航"].exists)
+        scroll.swipeUp()
+        let third = app.buttons["round-tick-3"]
+        XCTAssertTrue(third.waitForExistence(timeout: 3))
+        let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.lifetime = .keepAlways; add(screenshot)
+        third.tap()
+        let message = scroll.staticTexts["继续讨论第3轮的问题"]
+        XCTAssertTrue(message.waitForExistence(timeout: 5))
+        let arrived = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in message.isHittable }, object: message)
+        XCTAssertEqual(XCTWaiter.wait(for: [arrived], timeout: 5), .completed)
+        let disclosure = scroll.descendants(matching: .any)["message-references-3"]
+        XCTAssertTrue(disclosure.waitForExistence(timeout: 3))
+        disclosure.tap()
+        XCTAssertTrue(scroll.staticTexts["这是上一轮保留的高亮观点。"].waitForExistence(timeout: 3))
+        let expandedScreenshot = XCTAttachment(screenshot: app.screenshot()); expandedScreenshot.lifetime = .keepAlways; add(expandedScreenshot)
+        scroll.swipeUp()
+        let fourth = app.buttons["round-tick-4"]
+        XCTAssertTrue(fourth.waitForExistence(timeout: 3))
+        fourth.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            .press(forDuration: 0.3, thenDragTo: app.buttons["round-tick-1"].coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)), withVelocity: .slow, thenHoldForDuration: 0.5)
+        let draggedScreenshot = XCTAttachment(screenshot: app.screenshot()); draggedScreenshot.lifetime = .keepAlways; add(draggedScreenshot)
+        let firstRound = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            scroll.staticTexts["继续讨论第1轮的问题"].isHittable
+        }, object: app)
+        XCTAssertEqual(XCTWaiter.wait(for: [firstRound], timeout: 5), .completed)
+    }
+
+    func testEachModelRestoresItsOwnReadingOffset() throws {
+        try XCTSkipIf(UIDevice.current.userInterfaceIdiom == .pad, "Paging is an iPhone interaction")
+        let app = XCUIApplication()
+        app.launchArguments = ["--demo", "--demo-rounds"]
+        app.launch()
+        let first = app.scrollViews["thread-OpenAI"]
+        XCTAssertTrue(first.waitForExistence(timeout: 10))
+        first.swipeUp()
+        let firstAnswer = first.textViews.matching(NSPredicate(format: "label == %@", "第1轮 · 第8段：这是一段可滚动的多轮回答。每个模型应该记住自己的阅读位置，轮次标记可以直接跳转。")).firstMatch
+        let offsetA = first.frame.minY - firstAnswer.frame.minY
+        first.swipeLeft()
+        XCTAssertTrue(app.buttons["model-tab-Claude"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["model-tab-Claude"].isSelected)
+        let second = app.scrollViews["thread-Claude"]
+        second.swipeUp()
+        second.swipeUp()
+        let secondAnswer = second.textViews.matching(NSPredicate(format: "label == %@", "第2轮 · 第3段：这是一段可滚动的多轮回答。每个模型应该记住自己的阅读位置，轮次标记可以直接跳转。")).firstMatch
+        let offsetB = second.frame.minY - secondAnswer.frame.minY
+        second.swipeRight()
+        let restoredA = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            abs((first.frame.minY - firstAnswer.frame.minY) - offsetA) < 25
+        }, object: first)
+        XCTAssertEqual(XCTWaiter.wait(for: [restoredA], timeout: 5), .completed, "Expected \(offsetA), actual \(first.frame.minY - firstAnswer.frame.minY)")
+        first.swipeLeft()
+        let restoredB = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            abs((second.frame.minY - secondAnswer.frame.minY) - offsetB) < 25
+        }, object: second)
+        XCTAssertEqual(XCTWaiter.wait(for: [restoredB], timeout: 5), .completed, "Expected \(offsetB), actual \(second.frame.minY - secondAnswer.frame.minY)")
+    }
+
     func testHistoryDeletionRequiresExplicitConfirmation() {
         let app = XCUIApplication()
         app.launchArguments = ["--demo"]

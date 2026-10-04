@@ -33,6 +33,7 @@ struct ChatMessage: Codable, Identifiable, Equatable, Sendable {
     var role: String
     var content: String
     var display: String? = nil
+    var references: [Quote]? = nil
     var round: Int
     var highlights: [Highlight] = []
     var error: Bool = false

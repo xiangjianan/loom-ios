@@ -56,7 +56,7 @@ struct SettingsView: View {
                     }.accessibilityIdentifier("settings-backup")
                 }
                 Section {
-                    Text("对话与高亮保存在本机。")
+                    Text("Loom 是一款开源的多模型对话应用，让不同观点交织，帮助你探索想法、开展头脑风暴。")
                         .font(.footnote).foregroundStyle(.secondary)
                     Link("参与共建", destination: URL(string: "https://github.com/xiangjianan/loom-ios")!)
                 } header: { Text("关于") }

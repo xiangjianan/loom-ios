@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     @Bindable var store: LoomStore
     @Environment(\.dismiss) private var dismiss
+    @State private var showBackup = false
     @State private var relay = ""
     @State private var error: String?
     @State private var clearConfirmation = false
@@ -53,7 +54,12 @@ struct SettingsView: View {
                         Text("单击句子").tag(true)
                     }.pickerStyle(.menu).accessibilityIdentifier("sentence-highlight-mode").onChange(of: store.singleTapHighlight) { _, _ in store.save() }
                     Button("清除当前对话的所有高亮", role: .destructive) { clearConfirmation = true }
-                } header: { Text("阅读") } footer: { Text("默认单击一句即可高亮，再点同一句取消；也可改为双击。长按使用系统选区菜单，拖动手柄可精确选择多行。移除引用标签也会取消对应高亮。") }
+                } header: { Text("阅读") } footer: { Text("默认单击一句即可高亮，再单击同一句取消；也可改为双击。长按使用系统选区菜单，拖动手柄可精确选择多行。移除引用标签也会取消对应高亮。") }
+                Section("数据") {
+                    Button { showBackup = true } label: {
+                        Label("备份与恢复", systemImage: "externaldrive")
+                    }.accessibilityIdentifier("settings-backup")
+                }
                 Section {
                     LabeledContent("版本", value: "1.8.0")
                     Text("Loom 让多个模型的观点交织，帮助你继续思考。对话与高亮保存在本地，暂不与网页或其他设备同步。")
@@ -65,6 +71,7 @@ struct SettingsView: View {
             }
             .navigationTitle("设置").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
+            .sheet(isPresented: $showBackup) { BackupView(store: store) }
             .onAppear { relay = store.relayURL }
             .confirmationDialog("清除所有高亮与待发送引用？", isPresented: $clearConfirmation, titleVisibility: .visible) {
                 Button("清除高亮", role: .destructive) { store.clearHighlights() }

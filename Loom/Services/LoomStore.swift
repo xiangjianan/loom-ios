@@ -158,6 +158,7 @@ final class LoomStore {
     func newConversation() {
         cancelAll()
         pendingRoundStarts.removeAll()
+        conversations.removeAll { $0.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && $0.quotes.isEmpty && $0.threads.allSatisfy { $0.messages.isEmpty } }
         let conversation = Conversation(threads: configurations.map { ModelThread(configuration: $0) })
         conversations.insert(conversation, at: 0)
         selectedConversation = conversation.id
@@ -167,7 +168,10 @@ final class LoomStore {
 
     func selectConversation(_ id: UUID) {
         guard conversations.contains(where: { $0.id == id }) else { return }
-        cancelAll(); pendingRoundStarts.removeAll(); selectedConversation = id; ensureSelection(); save()
+        guard id != selectedConversation else { return }
+        cancelAll(); pendingRoundStarts.removeAll()
+        conversations.removeAll { $0.id == selectedConversation && $0.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && $0.quotes.isEmpty && $0.threads.allSatisfy { $0.messages.isEmpty } }
+        selectedConversation = id; ensureSelection(); save()
     }
 
     func deleteConversation(_ id: UUID) {

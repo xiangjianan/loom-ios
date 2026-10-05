@@ -8,23 +8,18 @@ struct ThreadView: View {
     var isActive: Bool
     private let contentTopPadding: CGFloat = 20
     @State private var position = ScrollPosition(idType: UUID.self)
-    @State private var currentRound = 1
+    @State private var interaction = ReaderInteraction()
     @State private var roundPositionTask: Task<Void, Never>?
     @State private var railVisible = false
     @State private var scrubbing = false
     @State private var railHideTask: Task<Void, Never>?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    var onReadingScroll: (Bool) -> Void = { _ in }
-    @State private var scrollPhase: ScrollPhase = .idle
-    @State private var scrollTravel: CGFloat = 0
-    @State private var userScrolling = false
-    @State private var userScrollEndTask: Task<Void, Never>?
     @State private var reader = ReaderScrollController()
 
     var body: some View {
         GeometryReader { viewport in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: 24) {
                     if thread.messages.isEmpty { emptyState }
                     ForEach(thread.messages) { message in
                         MessageView(message: message, thread: thread, store: store).id(message.id)
@@ -32,7 +27,7 @@ struct ThreadView: View {
                                 let rect = geometry.frame(in: .scrollView(axis: .vertical))
                                 return rect.minY <= 100 && rect.maxY > 100
                             } action: { atReadingEdge in
-                                if atReadingEdge { currentRound = message.round }
+                                if atReadingEdge, interaction.currentRound != message.round { interaction.currentRound = message.round }
                             }
                     }
                     Color.clear.frame(height: 1).id("end")
@@ -56,26 +51,16 @@ struct ThreadView: View {
                 reader.restore(offset)
                 // Paging and the reading bars resize together; restore after they settle.
                 try? await Task.sleep(for: .milliseconds(360))
-                guard !Task.isCancelled, scrollPhase == .idle else { return }
+                guard !Task.isCancelled, interaction.phase == .idle else { return }
                 reader.restore(offset)
             }
             .onScrollPhaseChange { _, phase in
-                scrollPhase = phase
+                interaction.phase = phase
                 if phase == .interacting || phase == .tracking {
-                    userScrollEndTask?.cancel()
-                    userScrolling = true
                     roundPositionTask?.cancel()
-                    scrollTravel = 0
                     revealRail()
                 }
                 if phase == .idle {
-                    // SwiftUI can deliver the final geometry update after the idle phase.
-                    userScrollEndTask?.cancel()
-                    userScrollEndTask = Task { @MainActor in
-                        try? await Task.sleep(for: .milliseconds(150))
-                        guard !Task.isCancelled else { return }
-                        userScrolling = false
-                    }
                     scheduleRailHide()
                 }
             }
@@ -83,28 +68,18 @@ struct ThreadView: View {
                 let maximum = max(0, geometry.contentSize.height - geometry.containerSize.height + geometry.contentInsets.bottom)
                 return min(maximum, max(-geometry.contentInsets.top, geometry.contentOffset.y))
             } action: { old, new in
-                if isActive, scrubbing || scrollPhase == .tracking || scrollPhase == .interacting || scrollPhase == .decelerating || scrollPhase == .animating {
+                if isActive, scrubbing || interaction.phase == .tracking || interaction.phase == .interacting || interaction.phase == .decelerating || interaction.phase == .animating {
                     savedOffset = new
                 }
-                guard userScrolling else { return }
-                let delta = new - old
-                guard abs(delta) > 0.01 else { return }
-                if delta * scrollTravel < 0 { scrollTravel = 0 }
-                scrollTravel += delta
-                if abs(scrollTravel) > 24 {
-                    onReadingScroll(scrollTravel > 0)
-                    scrollTravel = 0
-                }
             }
-            .scrollDismissesKeyboard(.interactively)
+            .scrollDismissesKeyboard(.never)
             .accessibilityIdentifier("thread-\(thread.configuration.name)")
             .overlay(alignment: .leading) {
                 let rounds = Array(Set(thread.messages.map(\.round))).sorted()
                 if rounds.count > 1, railVisible {
-                    RoundScrubber(rounds: rounds, currentRound: currentRound) { round, dragging in
+                    RoundScrubber(rounds: rounds, interaction: interaction) { round, dragging in
                         if let message = thread.messages.first(where: { $0.round == round }) {
-                            userScrollEndTask?.cancel(); userScrolling = false
-                            currentRound = round
+                            interaction.currentRound = round
                             let jump = {
                                 if round == rounds.first { position.scrollTo(edge: .top) }
                                 else { position.scrollTo(id: message.id, anchor: UnitPoint(x: 0.5, y: 0.12)) }
@@ -118,7 +93,8 @@ struct ThreadView: View {
                         scrubbing = active
                         if active { revealRail() } else { scheduleRailHide() }
                     }
-                    .padding(.leading, 0)
+                    .padding(.leading, 12)
+                    .zIndex(100)
                     .transition(.opacity)
                 }
             }
@@ -127,13 +103,12 @@ struct ThreadView: View {
                     revealRoundStart(target)
                 }
             }
-            .onDisappear { railHideTask?.cancel(); roundPositionTask?.cancel(); userScrollEndTask?.cancel() }
+            .onDisappear { railHideTask?.cancel(); roundPositionTask?.cancel() }
 
         }
     }
     private func revealRoundStart(_ messageID: UUID) {
-        userScrollEndTask?.cancel(); userScrolling = false
-        if let message = thread.messages.first(where: { $0.id == messageID }) { currentRound = message.round }
+        if let message = thread.messages.first(where: { $0.id == messageID }) { interaction.currentRound = message.round }
         withAnimation(reduceMotion ? nil : .smooth(duration: 0.3)) {
             position.scrollTo(id: messageID, anchor: .top)
         }
@@ -141,7 +116,7 @@ struct ThreadView: View {
         roundPositionTask = Task { @MainActor in
             // A newly activated pager and a long answer both need a layout pass.
             try? await Task.sleep(for: .milliseconds(400))
-            guard !Task.isCancelled, scrollPhase != .interacting else { return }
+            guard !Task.isCancelled, interaction.phase != .interacting else { return }
             withAnimation(reduceMotion ? nil : .smooth(duration: 0.25)) {
                 position.scrollTo(id: messageID, anchor: .top)
             }
@@ -150,6 +125,7 @@ struct ThreadView: View {
 
     private func revealRail() {
         railHideTask?.cancel()
+        guard !railVisible else { return }
         withAnimation(.easeOut(duration: 0.15)) { railVisible = true }
     }
 
@@ -179,3 +155,10 @@ struct ThreadView: View {
     }
 }
 
+
+/// Scroll callbacks mutate this object without invalidating the reader's view hierarchy.
+/// Only the rail observes the active round; content doesn't subscribe to it.
+@Observable final class ReaderInteraction {
+    var currentRound = 1
+    var phase: ScrollPhase = .idle
+}

@@ -11,6 +11,7 @@
 		1691D70F0A0544EEFC17C617 /* RoundScrubber.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8210D3CE5F451D143F999D86 /* RoundScrubber.swift */; };
 		183733A16B2436C2A05A4D83 /* SelectableAnswer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56F9C234D48ACB23FC33084A /* SelectableAnswer.swift */; };
 		1F09285ADBB37FE0B144FC0D /* SVGAttachment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09C2F20FBE6D863CBFFAF68C /* SVGAttachment.swift */; };
+		2D5AAF85CAA4857AA2C21C31 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = A06EEB1D355157DB4878AA03 /* InfoPlist.strings */; };
 		2E0398C5BC9183154F02C626 /* ProviderPreset.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88FF461274147F624DDE7620 /* ProviderPreset.swift */; };
 		2FDA96AD0343822B818C76FF /* BackupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 064A65A22FDB70197CEC87D1 /* BackupView.swift */; };
 		3951CA589BDD266FA5CC5F1F /* ProviderClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51DBC9C3DFCC26D8635614FE /* ProviderClient.swift */; };
@@ -57,6 +58,7 @@
 /* Begin PBXFileReference section */
 		064A65A22FDB70197CEC87D1 /* BackupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupView.swift; sourceTree = "<group>"; };
 		09C2F20FBE6D863CBFFAF68C /* SVGAttachment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SVGAttachment.swift; sourceTree = "<group>"; };
+		1EE04E5944878294EED4D9F3 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
 		21B6C2C0879960ECDCE3548E /* LoomTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoomTests.swift; sourceTree = "<group>"; };
 		21C57ACE87660F67E93C3744 /* ReadingPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingPreview.swift; sourceTree = "<group>"; };
 		344CFA6BC8FABD0D25DC41C6 /* LoomBackup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoomBackup.swift; sourceTree = "<group>"; };
@@ -122,6 +124,7 @@
 			children = (
 				6E6E64FD9D6B923A722BBACC /* Assets.xcassets */,
 				E1C56B209A789F8A6B688544 /* PrivacyInfo.xcprivacy */,
+				A06EEB1D355157DB4878AA03 /* InfoPlist.strings */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -272,11 +275,11 @@
 				};
 			};
 			buildConfigurationList = 8469BC710BBCEBFD6D40602E /* Build configuration list for PBXProject "Loom" */;
-			developmentRegion = en;
+			developmentRegion = "zh-Hans";
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				Base,
-				en,
+				"zh-Hans",
 			);
 			mainGroup = B380268C9C7FBB9A4D2886D6;
 			minimizedProjectReferenceProxies = 1;
@@ -298,6 +301,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				516C5055D1918BBA58610A73 /* Assets.xcassets in Resources */,
+				2D5AAF85CAA4857AA2C21C31 /* InfoPlist.strings in Resources */,
 				BA90770252FD2DD969792324 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -366,6 +370,17 @@
 			targetProxy = C9D08863B97F9676FE553444 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
+
+/* Begin PBXVariantGroup section */
+		A06EEB1D355157DB4878AA03 /* InfoPlist.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				1EE04E5944878294EED4D9F3 /* zh-Hans */,
+			);
+			name = InfoPlist.strings;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
 
 /* Begin XCBuildConfiguration section */
 		0597129A1260A66422EB504F /* Debug */ = {
@@ -481,7 +496,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 15;
+				CURRENT_PROJECT_VERSION = 16;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = "";
 				ENABLE_NS_ASSERTIONS = NO;
@@ -503,7 +518,7 @@
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.8.0;
+				MARKETING_VERSION = 1.9.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -550,7 +565,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 15;
+				CURRENT_PROJECT_VERSION = 16;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -578,7 +593,7 @@
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.8.0;
+				MARKETING_VERSION = 1.9.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;

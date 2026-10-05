@@ -16,6 +16,7 @@ struct SelectableAnswer: UIViewRepresentable {
         view.isSelectable = true
         view.isScrollEnabled = true
         view.bounces = false
+        view.keyboardDismissMode = .none
         view.alwaysBounceHorizontal = false
         view.contentInsetAdjustmentBehavior = .never
         view.textContainer.widthTracksTextView = true
@@ -39,9 +40,10 @@ struct SelectableAnswer: UIViewRepresentable {
     func updateUIView(_ view: ReadingTextView, context: Context) {
         context.coordinator.parent = self
         context.coordinator.tap?.numberOfTapsRequired = singleTapHighlight ? 1 : 2
-        let signature = "\(content)|\(highlights)|\(dynamicTypeSize)|\(colorScheme)"
+        let signature = RenderSignature(content: content, highlights: highlights, dynamicTypeSize: dynamicTypeSize, colorScheme: colorScheme)
         guard context.coordinator.signature != signature else { return }
         context.coordinator.signature = signature
+        context.coordinator.measuredSize = nil
         let selected = view.selectedRange
         context.coordinator.updating = true
         let text = AnswerRenderer.render(content)
@@ -55,8 +57,11 @@ struct SelectableAnswer: UIViewRepresentable {
     }
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: ReadingTextView, context: Context) -> CGSize? {
         guard let width = proposal.width, width.isFinite, width > 0 else { return nil }
+        if let measured = context.coordinator.measuredSize, measured.width == width { return measured }
         uiView.prepareSVGLayout(width: width)
-        return CGSize(width: width, height: ceil(uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height))
+        let measured = CGSize(width: width, height: ceil(uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height))
+        context.coordinator.measuredSize = measured
+        return measured
     }
     func makeCoordinator() -> Coordinator { Coordinator(self) }
     static func dismantleUIView(_ uiView: ReadingTextView, coordinator: Coordinator) {
@@ -64,9 +69,17 @@ struct SelectableAnswer: UIViewRepresentable {
         uiView.delegate = nil
     }
 
+    struct RenderSignature: Equatable {
+        let content: String
+        let highlights: [Highlight]
+        let dynamicTypeSize: DynamicTypeSize
+        let colorScheme: ColorScheme
+    }
+
     @MainActor final class Coordinator: NSObject, UITextViewDelegate, UIGestureRecognizerDelegate {
         var parent: SelectableAnswer
-        var signature = ""
+        var signature: RenderSignature?
+        var measuredSize: CGSize?
         var updating = false
         weak var tap: UITapGestureRecognizer?
         init(_ parent: SelectableAnswer) { self.parent = parent }
@@ -218,7 +231,14 @@ struct VerticalReaderScrollLock: UIViewRepresentable {
         }
         func disconnect() {
             observation?.invalidate(); observation = nil
+            reader?.panGestureRecognizer.removeTarget(self, action: #selector(readerPanned(_:)))
             reader = nil
+        }
+        @objc private func readerPanned(_ gesture: UIPanGestureRecognizer) {
+            guard gesture.state == .changed,
+                  gesture.translation(in: self).y > 32,
+                  gesture.velocity(in: self).y > 0 else { return }
+            window?.endEditing(true)
         }
         func connect() {
             guard window != nil else { return }
@@ -228,9 +248,11 @@ struct VerticalReaderScrollLock: UIViewRepresentable {
                     guard reader !== scroll else { return }
                     disconnect()
                     reader = scroll
+                    scroll.panGestureRecognizer.addTarget(self, action: #selector(readerPanned(_:)))
                     controller?.attach(scroll)
                     scroll.alwaysBounceHorizontal = false
                     scroll.isDirectionalLockEnabled = true
+                    scroll.keyboardDismissMode = .none
                     observation = scroll.observe(\.contentOffset, options: [.initial, .new]) { [weak scroll] _, _ in
                         MainActor.assumeIsolated {
                             guard let scroll, abs(scroll.contentOffset.x) > 0.1 else { return }

@@ -3,7 +3,7 @@ import SwiftUI
 /// A scroll-time rail: tap a tick or scrub vertically without opening a menu.
 struct RoundScrubber: View {
     let rounds: [Int]
-    let currentRound: Int
+    let interaction: ReaderInteraction
     var onSelect: (Int, Bool) -> Void
     var onScrubbingChanged: (Bool) -> Void
     @State private var draggedRound: Int?
@@ -11,7 +11,7 @@ struct RoundScrubber: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let height = min(geometry.size.height * 0.7, CGFloat(rounds.count) * 44)
+            let height = min(geometry.size.height * 0.7, CGFloat(rounds.count) * 48)
             let step = height / CGFloat(max(1, rounds.count))
             VStack(spacing: 0) {
                 ForEach(rounds, id: \.self) { round in
@@ -19,17 +19,15 @@ struct RoundScrubber: View {
                         tapFeedback += 1
                         onSelect(round, false)
                     } label: {
-                        Text("—")
-                            .font(.system(size: round == (draggedRound ?? currentRound) ? 24 : 16, weight: .bold))
-                            .foregroundStyle(.clear)
-                            .overlay {
+                        Color.clear
+                            .overlay(alignment: .leading) {
                                 RoundedRectangle(cornerRadius: 1.5)
-                                    .fill(round == (draggedRound ?? currentRound) ? Color.indigo : Color.secondary.opacity(0.6))
-                                    .frame(width: round == (draggedRound ?? currentRound) ? 20 : 12, height: 3)
-                                    .offset(x: -9)
+                                    .fill(round == (draggedRound ?? interaction.currentRound) ? Color.indigo : Color.secondary.opacity(0.6))
+                                    .frame(width: round == (draggedRound ?? interaction.currentRound) ? 20 : 12, height: 3)
+                                    .padding(.leading, 6)
                                     .accessibilityHidden(true)
                             }
-                            .frame(width: 44, height: step)
+                            .frame(width: 52, height: step)
                             .contentShape(.rect)
                             .accessibilityLabel("跳到第 \(round) 轮")
                             .accessibilityIdentifier("round-tick-\(round)")
@@ -37,10 +35,27 @@ struct RoundScrubber: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel("跳到第 \(round) 轮")
                     .accessibilityIdentifier("round-tick-\(round)")
-                    .accessibilityAddTraits(round == currentRound ? .isSelected : [])
+                    .accessibilityAddTraits(round == interaction.currentRound ? .isSelected : [])
                 }
             }
-            .frame(width: 44, height: height)
+            .frame(width: 52, height: height)
+            .background {
+                Rectangle().fill(.ultraThinMaterial)
+                    .opacity(0.45)
+                    .mask {
+                        LinearGradient(stops: [
+                            .init(color: .clear, location: 0),
+                            .init(color: .black, location: 0.25),
+                            .init(color: .black, location: 0.7),
+                            .init(color: .clear, location: 1)
+                        ], startPoint: .leading, endPoint: .trailing)
+                        .mask {
+                            LinearGradient(colors: [.clear, .black, .black, .clear], startPoint: .top, endPoint: .bottom)
+                        }
+                    }
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
             .contentShape(.rect)
             .highPriorityGesture(
                 DragGesture(minimumDistance: 5)
@@ -72,6 +87,6 @@ struct RoundScrubber: View {
             .sensoryFeedback(.selection, trigger: draggedRound)
             .position(x: geometry.size.width / 2, y: geometry.size.height / 2)
         }
-        .frame(width: 44)
+        .frame(width: 52)
     }
 }

@@ -3,7 +3,29 @@ import UIKit
 
 /// Foundation parses Markdown semantics; TextKit displays native selectable rich text.
 @MainActor enum AnswerRenderer {
+    private static let cache: NSCache<NSString, NSAttributedString> = {
+        let cache = NSCache<NSString, NSAttributedString>()
+        cache.countLimit = 64
+        cache.totalCostLimit = 8 * 1024 * 1024
+        return cache
+    }()
+
     static func render(_ markdown: String) -> NSMutableAttributedString {
+        // SVG attachments own mutable layout bounds; keep those outside the shared cache.
+        let cacheable = !markdown.localizedCaseInsensitiveContains("<svg")
+        let key = "\(UIFont.preferredFont(forTextStyle: .body).pointSize)|\(markdown)" as NSString
+        if cacheable, let saved = cache.object(forKey: key) {
+            return NSMutableAttributedString(attributedString: saved)
+        }
+        let rendered = parse(markdown)
+        if cacheable {
+            cache.setObject(NSAttributedString(attributedString: rendered), forKey: key,
+                            cost: rendered.length * 16 + markdown.utf8.count)
+        }
+        return rendered
+    }
+
+    private static func parse(_ markdown: String) -> NSMutableAttributedString {
         let extracted = SVGDocument.extract(from: markdown)
         guard let parsed = try? AttributedString(markdown: extracted.markdown, options: .init(
             interpretedSyntax: .full, failurePolicy: .returnPartiallyParsedIfPossible)) else {

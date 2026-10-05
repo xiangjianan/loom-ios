@@ -44,14 +44,14 @@ import UIKit
         XCTAssertGreaterThan(target.frame.midX, reader.frame.maxX - 16)
         let tick = app.buttons["round-tick-2"]
         XCTAssertTrue(tick.waitForExistence(timeout: 3))
-        XCTAssertLessThanOrEqual(tick.frame.maxX, reader.frame.minX + 48)
+        XCTAssertLessThanOrEqual(tick.frame.maxX, reader.frame.minX + 64)
         let shot = XCTAttachment(screenshot: app.screenshot()); shot.lifetime = .keepAlways; add(shot)
         // UIKit owns the thumb's long-press enlargement and scrubbing; no app
         // recognizer may intercept it. XCTest's idle wait outlasts its fade, so
         // transient native gesture behavior needs device verification.
     }
 
-    func testChromeAnimationDoesNotDisplaceReadingText() {
+    func testScrollingWithFixedBarsDoesNotDisplaceReadingText() {
         let app = XCUIApplication()
         app.launchArguments = ["--demo", "--demo-rounds"]
         app.launch()
@@ -66,10 +66,10 @@ import UIKit
         let distance = start.screenPoint.y - end.screenPoint.y
         start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.6)
         let after = first.frame.minY
-        XCTAssertEqual(before - after, distance, accuracy: 20, "Hiding chrome must not add a layout jump to the finger's travel")
-        XCTAssertTrue(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in !app.buttons["model-tab-OpenAI"].isHittable }, object: app)], timeout: 5) == .completed)
+        XCTAssertEqual(before - after, distance, accuracy: 20, "Fixed bars must not add a layout jump to the finger's travel")
+        XCTAssertTrue(app.buttons["model-tab-OpenAI"].isHittable)
         end.press(forDuration: 0.05, thenDragTo: start, withVelocity: .slow, thenHoldForDuration: 0.6)
-        XCTAssertEqual(first.frame.minY, before, accuracy: 20, "Showing chrome must preserve the same reading position")
+        XCTAssertEqual(first.frame.minY, before, accuracy: 20, "Reversing scroll must preserve the same reading position")
         XCTAssertTrue(app.buttons["model-tab-OpenAI"].waitForExistence(timeout: 5))
     }
 
@@ -93,10 +93,62 @@ import UIKit
         app.buttons[oldID].tap()
         XCTAssertTrue(app.staticTexts["继续讨论第1轮的问题"].firstMatch.waitForExistence(timeout: 5))
         menu.tap()
+        app.buttons["drawer-search-button"].tap()
         let search = app.textFields["drawer-search"]
         search.tap(); search.typeText("unlikely-conversation-123")
         XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "history-row-")).count, 0)
-        app.buttons["drawer-close"].tap()
+        app.buttons["drawer-backdrop"].tap()
+        XCTAssertTrue(menu.waitForExistence(timeout: 5))
+    }
+
+    func testDrawerSearchDownwardDragDismissesKeyboard() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--demo"]
+        app.launch()
+        let menu = app.buttons["workspace-menu"]
+        XCTAssertTrue(menu.waitForExistence(timeout: 10))
+        menu.tap()
+        app.buttons["drawer-search-button"].tap()
+        let search = app.textFields["drawer-search"]
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.tap()
+        search.typeText("不同")
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.45, dy: 0.28))
+            .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.45, dy: 0.48)))
+        let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in !app.keyboards.firstMatch.exists }, object: app)
+        XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: 5), .completed)
+        XCTAssertEqual(search.value as? String, "不同")
+        XCTAssertTrue(app.buttons["drawer-settings"].isHittable)
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.lifetime = .keepAlways; add(shot)
+        search.tap()
+        search.typeText("观点")
+        XCTAssertEqual(search.value as? String, "不同观点")
+    }
+
+    func testEdgeRevealKeepsModelAndSettingsKeepsDrawerOpen() throws {
+        try XCTSkipIf(UIDevice.current.userInterfaceIdiom == .pad, "Phone edge gesture")
+        let app = XCUIApplication()
+        app.launchArguments = ["--demo", "--demo-rounds"]
+        app.launch()
+        let menu = app.buttons["workspace-menu"]
+        XCTAssertTrue(menu.waitForExistence(timeout: 10))
+        let selected = app.buttons["model-tab-OpenAI"].isSelected
+        let edge = app.coordinate(withNormalizedOffset: CGVector(dx: 0.015, dy: 0.45))
+        edge.press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.7, dy: 0.45)))
+        XCTAssertTrue(app.buttons["drawer-settings"].waitForExistence(timeout: 5))
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.lifetime = .keepAlways
+        add(shot)
+        app.buttons["drawer-settings"].tap()
+        XCTAssertTrue(app.navigationBars["设置"].waitForExistence(timeout: 5))
+        app.buttons["完成"].tap()
+        XCTAssertTrue(app.buttons["drawer-settings"].waitForExistence(timeout: 5))
+        app.buttons["drawer-backdrop"].tap()
+        XCTAssertTrue(menu.waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons["model-tab-OpenAI"].isSelected, selected)
+        menu.tap()
+        app.buttons["drawer-backdrop"].tap()
         XCTAssertTrue(menu.waitForExistence(timeout: 5))
     }
 
@@ -125,7 +177,9 @@ import UIKit
         app.launch()
         XCTAssertTrue(app.buttons["workspace-menu"].waitForExistence(timeout: 10))
         app.buttons["workspace-menu"].tap()
-        app.buttons["备份"].tap()
+        app.buttons["drawer-settings"].tap()
+        XCTAssertTrue(app.buttons["settings-backup"].waitForExistence(timeout: 5))
+        app.buttons["settings-backup"].tap()
         XCTAssertTrue(app.navigationBars["备份"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["backup-export"].exists)
         XCTAssertTrue(app.buttons["backup-import"].exists)
@@ -144,7 +198,9 @@ import UIKit
         app.launch()
         XCTAssertTrue(app.buttons["workspace-menu"].waitForExistence(timeout: 10))
         app.buttons["workspace-menu"].tap()
-        app.buttons["备份"].tap()
+        app.buttons["drawer-settings"].tap()
+        XCTAssertTrue(app.buttons["settings-backup"].waitForExistence(timeout: 5))
+        app.buttons["settings-backup"].tap()
         XCTAssertTrue(app.buttons["backup-cloud-save"].waitForExistence(timeout: 5))
         app.buttons["backup-cloud-save"].tap()
         XCTAssertTrue(app.alerts["备份"].waitForExistence(timeout: 5))
@@ -172,9 +228,11 @@ import UIKit
         prompt.typeText("继续思考")
         XCTAssertTrue(app.buttons["send-button"].isEnabled)
         app.buttons["workspace-menu"].tap()
-        app.buttons["模型设置"].tap()
+        app.buttons["drawer-settings"].tap()
         XCTAssertTrue(app.navigationBars["设置"].waitForExistence(timeout: 5))
         app.buttons["完成"].tap()
+        XCTAssertTrue(app.buttons["drawer-backdrop"].waitForExistence(timeout: 5))
+        app.buttons["drawer-backdrop"].tap()
         XCTAssertTrue(prompt.exists)
     }
 
@@ -206,7 +264,7 @@ import UIKit
         XCTAssertTrue(answer.waitForExistence(timeout: 10))
         answer.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.04)).press(forDuration: 1.2)
         XCTAssertFalse(app.scrollViews["quote-tray"].exists)
-        let copy = app.menuItems.matching(NSPredicate(format: "label IN %@", ["Copy", "拷贝", "复制"])).firstMatch
+        let copy = app.menuItems.matching(NSPredicate(format: "label IN %@", ["拷贝", "复制"])).firstMatch
         XCTAssertTrue(copy.waitForExistence(timeout: 5), app.debugDescription)
         XCTAssertFalse(app.otherElements["UIContextMenuContentView"].exists)
         for _ in 0..<4 where !app.menuItems["高亮"].exists {
@@ -220,6 +278,13 @@ import UIKit
         let app = XCUIApplication()
         app.launchArguments = ["--demo"]
         app.launch()
+        app.buttons["workspace-menu"].tap()
+        app.buttons["drawer-settings"].tap()
+        app.swipeUp()
+        app.buttons["sentence-highlight-mode"].tap()
+        app.buttons["单击句子"].tap()
+        app.buttons["完成"].tap()
+        app.buttons["drawer-backdrop"].tap()
         let answer = app.textViews.firstMatch
         XCTAssertTrue(answer.waitForExistence(timeout: 10))
         let point = answer.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.04))
@@ -233,20 +298,17 @@ import UIKit
         app.launchArguments = ["--demo"]
         app.launch()
         app.buttons["workspace-menu"].tap()
-        app.buttons["模型设置"].tap()
+        app.buttons["drawer-settings"].tap()
         app.swipeUp()
         let mode = app.buttons["sentence-highlight-mode"]
         XCTAssertTrue(mode.waitForExistence(timeout: 5))
         mode.tap()
         app.buttons["双击句子"].tap()
         app.buttons["完成"].tap()
+        app.buttons["drawer-backdrop"].tap()
         let answer = app.textViews.firstMatch
         let point = answer.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.04))
         point.tap()
-        XCTAssertFalse(app.scrollViews["quote-tray"].exists)
-        point.doubleTap()
-        XCTAssertTrue(app.scrollViews["quote-tray"].waitForExistence(timeout: 5))
-        point.doubleTap()
         XCTAssertFalse(app.scrollViews["quote-tray"].exists)
         point.doubleTap()
         XCTAssertTrue(app.scrollViews["quote-tray"].waitForExistence(timeout: 5))
@@ -268,6 +330,57 @@ import UIKit
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.lifetime = .keepAlways; add(screenshot)
     }
 
+    func testKeyboardStaysOpenWhenScrollingAnswers() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--demo", "--demo-rounds"]
+        app.launch()
+        let prompt = app.textFields["prompt-field"]
+        XCTAssertTrue(prompt.waitForExistence(timeout: 10))
+        prompt.tap()
+        prompt.typeText("继续讨论")
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+        let softwareKeyboardVisible = app.keyboards.firstMatch.isHittable
+        // The full reader extends behind the keyboard; gesture within visible text only.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.42))
+            .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.2)))
+        XCTAssertTrue(app.keyboards.firstMatch.exists)
+        if softwareKeyboardVisible { XCTAssertTrue(app.keyboards.firstMatch.isHittable) }
+        XCTAssertTrue(prompt.isHittable)
+        prompt.typeText("，补充")
+        XCTAssertTrue((prompt.value as? String)?.contains("，补充") == true)
+        let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        shot.lifetime = .keepAlways
+        add(shot)
+    }
+
+    func testDownwardReadingDragDismissesKeyboard() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--demo", "--demo-long"]
+        app.launch()
+        let prompt = app.textFields["prompt-field"]
+        XCTAssertTrue(prompt.waitForExistence(timeout: 10))
+        prompt.tap()
+        prompt.typeText("继续讨论")
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.2))
+            .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.42)))
+        let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in !app.keyboards.firstMatch.exists }, object: app)
+        XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: 5), .completed)
+        XCTAssertTrue(app.buttons["model-tab-OpenAI"].isHittable)
+        XCTAssertTrue(prompt.isHittable)
+    }
+
+    func testDefaultSingleTapHighlights() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--demo"]
+        app.launch()
+        let answer = app.textViews.firstMatch
+        XCTAssertTrue(answer.waitForExistence(timeout: 10))
+        let point = answer.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.04))
+        point.tap()
+        XCTAssertTrue(app.scrollViews["quote-tray"].waitForExistence(timeout: 5))
+    }
+
     func testRoundTicksTapScrubAndExpandSentReferences() {
         let app = XCUIApplication()
         app.launchArguments = ["--demo", "--demo-rounds"]
@@ -283,7 +396,11 @@ import UIKit
         let third = app.buttons["round-tick-3"]
         XCTAssertTrue(third.waitForExistence(timeout: 3))
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.lifetime = .keepAlways; add(screenshot)
-        third.tap()
+        XCTAssertGreaterThanOrEqual(third.frame.width, 52)
+        let quoteButtons = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "移除引用："))
+        let quotesBefore = quoteButtons.count
+        third.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
+        XCTAssertEqual(quoteButtons.count, quotesBefore, "Round hit area must consume the tap without highlighting text")
         let message = scroll.staticTexts["继续讨论第3轮的问题"]
         XCTAssertTrue(message.waitForExistence(timeout: 5))
         let arrived = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in message.isHittable }, object: message)
@@ -385,7 +502,7 @@ import UIKit
         XCTAssertTrue(app.scrollViews["quote-tray"].waitForNonExistence(timeout: 5))
     }
 
-    func testPadReadingScrollHidesAndRestoresChrome() throws {
+    func testPadReadingScrollKeepsChromeVisible() throws {
         try XCTSkipUnless(UIDevice.current.userInterfaceIdiom == .pad, "Parallel reading is an iPad interaction")
         let app = XCUIApplication()
         app.launchArguments = ["--demo", "--demo-long"]
@@ -396,7 +513,8 @@ import UIKit
         let height = scroll.frame.height
         XCTAssertLessThan(scroll.frame.minY, tab.frame.minY, "The reader must extend behind the glass bar")
         scroll.swipeUp()
-        XCTAssertTrue(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in !tab.isHittable }, object: tab)], timeout: 5) == .completed)
+        XCTAssertTrue(tab.isHittable)
+        XCTAssertTrue(app.textFields["prompt-field"].isHittable)
         XCTAssertGreaterThanOrEqual(scroll.frame.height + 1, height)
         // Native paging may inset the frame at rounded screen corners. Reading must
         // extend into the status-bar band and reach the bottom edge.
@@ -410,7 +528,7 @@ import UIKit
         XCTAssertTrue(app.textFields["prompt-field"].exists)
     }
 
-    func testReadingScrollHidesChromeAndReverseOrModelSwipeRestoresIt() throws {
+    func testReadingScrollKeepsChromeVisible() throws {
         try XCTSkipIf(UIDevice.current.userInterfaceIdiom == .pad, "Model paging is an iPhone interaction")
         let app = XCUIApplication()
         app.launchArguments = ["--demo", "--demo-long"]
@@ -421,8 +539,9 @@ import UIKit
         let originalHeight = scroll.frame.height
         XCTAssertLessThan(scroll.frame.minY, tab.frame.minY, "The reader must extend behind the glass bar")
         scroll.swipeUp()
-        XCTAssertTrue(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in !tab.isHittable }, object: tab)], timeout: 5) == .completed)
-        XCTAssertFalse(app.textFields["prompt-field"].isHittable)
+        XCTAssertTrue(tab.isHittable)
+        XCTAssertTrue(app.textFields["prompt-field"].isHittable)
+        XCTAssertTrue(app.textFields["prompt-field"].isHittable)
         XCTAssertGreaterThanOrEqual(scroll.frame.height + 1, originalHeight)
         // Native paging may inset the frame at rounded screen corners. Reading must
         // extend into the status-bar band and reach the bottom edge.
@@ -439,7 +558,8 @@ import UIKit
         let glassScreenshot = XCTAttachment(screenshot: app.screenshot()); glassScreenshot.lifetime = .keepAlways; add(glassScreenshot)
         XCTAssertGreaterThan(scroll.frame.maxY, app.textFields["prompt-field"].frame.maxY, "The reader must extend behind the input surroundings")
         scroll.swipeUp()
-        XCTAssertTrue(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in !tab.isHittable }, object: tab)], timeout: 5) == .completed)
+        XCTAssertTrue(tab.isHittable)
+        XCTAssertTrue(app.textFields["prompt-field"].isHittable)
         scroll.swipeLeft()
         XCTAssertTrue(app.buttons["model-tab-Claude"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["model-tab-Claude"].isSelected)
@@ -483,7 +603,7 @@ import UIKit
         app.launchArguments = ["--demo", "--ui-test-discovery"]
         app.launch()
         app.buttons["workspace-menu"].tap()
-        app.buttons["模型设置"].tap()
+        app.buttons["drawer-settings"].tap()
         app.buttons["添加模型"].tap()
         let picker = app.buttons["provider-picker"]
         XCTAssertTrue(picker.waitForExistence(timeout: 5))

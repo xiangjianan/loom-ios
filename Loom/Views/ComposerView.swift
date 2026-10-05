@@ -2,7 +2,7 @@ import SwiftUI
 
 struct ComposerView: View {
     @Bindable var store: LoomStore
-    @FocusState private var focused: Bool
+    var focus: FocusState<Bool>.Binding
     var body: some View {
         VStack(spacing: 10) {
             if !store.current.quotes.isEmpty {
@@ -24,13 +24,13 @@ struct ComposerView: View {
             HStack(alignment: .bottom, spacing: 8) {
                 TextField("写下问题…", text: $store.draft, axis: .vertical)
                     .lineLimit(1...7)
-                    .focused($focused)
+                    .focused(focus)
                     .padding(.leading, 10).padding(.vertical, 10)
                     .frame(minHeight: 44)
                     .accessibilityIdentifier("prompt-field")
                 Button {
                     if store.isWorking { store.cancelAll() }
-                    else { store.send(); if store.notice == nil { focused = false } }
+                    else { store.send(); if store.notice == nil { focus.wrappedValue = false } }
                 } label: {
                     Image(systemName: store.isWorking ? "stop.fill" : "arrow.up")
                         .font(.system(size: 18, weight: .semibold)).frame(width: 44, height: 44)
@@ -43,7 +43,7 @@ struct ComposerView: View {
                 .accessibilityIdentifier("send-button")
             }
             .padding(6)
-            .glassEffect(.regular.tint(Color(uiColor: .systemBackground).opacity(0.04)), in: .rect(cornerRadius: 28))
+            .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 28))
         }
         .padding(.horizontal, 12).padding(.top, 6).padding(.bottom, 4)
         .frame(maxWidth: 1100).frame(maxWidth: .infinity)

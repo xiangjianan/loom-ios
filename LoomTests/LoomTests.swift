@@ -3,6 +3,43 @@ import UIKit
 @testable import Loom
 
 @MainActor final class LoomTests: XCTestCase {
+    func testLeavingEmptyConversationRemovesItFromHistory() {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let store = LoomStore(fileURL: url, demo: true)
+        let original = store.selectedConversation
+        store.newConversation()
+        let empty = store.selectedConversation
+        store.selectConversation(original)
+        XCTAssertFalse(store.conversations.contains { $0.id == empty })
+        XCTAssertEqual(store.selectedConversation, original)
+        store.newConversation()
+        let firstEmpty = store.selectedConversation
+        store.newConversation()
+        XCTAssertFalse(store.conversations.contains { $0.id == firstEmpty })
+    }
+
+    func testCachedRenderingDoesNotShareHighlightMutations() {
+        let markdown = "缓存中的回答。**重点**"
+        let first = AnswerRenderer.render(markdown)
+        first.addAttribute(.backgroundColor, value: UIColor.systemYellow, range: NSRange(location: 0, length: 2))
+        first.deleteCharacters(in: NSRange(location: 0, length: 2))
+        let second = AnswerRenderer.render(markdown)
+        XCTAssertEqual(second.string, "缓存中的回答。重点")
+        XCTAssertNil(second.attribute(.backgroundColor, at: 0, effectiveRange: nil))
+    }
+
+    func testDefaultSingleTapAndExplicitSingleTapPreferencePersist() {
+        let url = temporaryFile()
+        let store = LoomStore(fileURL: url)
+        XCTAssertTrue(store.singleTapHighlight)
+        store.singleTapHighlight = true
+        store.save()
+        XCTAssertTrue(LoomStore(fileURL: url).singleTapHighlight)
+        store.singleTapHighlight = false
+        store.save()
+        XCTAssertFalse(LoomStore(fileURL: url).singleTapHighlight)
+    }
+
     private func temporaryFile() -> URL { FileManager.default.temporaryDirectory.appending(path: UUID().uuidString + "/state.json") }
     private func makeSession() -> URLSession {
         let config = URLSessionConfiguration.ephemeral

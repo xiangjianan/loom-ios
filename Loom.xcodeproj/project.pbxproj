@@ -16,6 +16,7 @@
 		3951CA589BDD266FA5CC5F1F /* ProviderClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51DBC9C3DFCC26D8635614FE /* ProviderClient.swift */; };
 		428D7FC9A0C6587E1FA31C93 /* LoomUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDBEE1BEC01864BF5606D35F /* LoomUITests.swift */; };
 		443D3C5F58851EA29261D1F7 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C44DEA3B7E1FFEB14AC52F58 /* KeychainStore.swift */; };
+		49C162CD30FA55AF811F334B /* CloudBackup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F17ED56274DB1A5FBAD02C8 /* CloudBackup.swift */; };
 		503C9275A42B2DC917C38E8A /* WorkspaceMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = E09DB7945ACF697413AB5055 /* WorkspaceMenu.swift */; };
 		50A8A9EBF4691ECF3075B1D8 /* BackupTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9E44FEEF209CD74A3F0C441 /* BackupTests.swift */; };
 		50D90A4EC0971A80D6E215CD /* ThreadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B206677B44BEA59D85EC94DF /* ThreadView.swift */; };
@@ -60,6 +61,7 @@
 		21B6C2C0879960ECDCE3548E /* LoomTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoomTests.swift; sourceTree = "<group>"; };
 		21C57ACE87660F67E93C3744 /* ReadingPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingPreview.swift; sourceTree = "<group>"; };
 		344CFA6BC8FABD0D25DC41C6 /* LoomBackup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoomBackup.swift; sourceTree = "<group>"; };
+		3F17ED56274DB1A5FBAD02C8 /* CloudBackup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudBackup.swift; sourceTree = "<group>"; };
 		412AA912F72FEB53687A27B8 /* LoomApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoomApp.swift; sourceTree = "<group>"; };
 		51DBC9C3DFCC26D8635614FE /* ProviderClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderClient.swift; sourceTree = "<group>"; };
 		56F9C234D48ACB23FC33084A /* SelectableAnswer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectableAnswer.swift; sourceTree = "<group>"; };
@@ -139,6 +141,7 @@
 		B31DA3552C2406DB61B3C1EA /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				3F17ED56274DB1A5FBAD02C8 /* CloudBackup.swift */,
 				C44DEA3B7E1FFEB14AC52F58 /* KeychainStore.swift */,
 				7B42DD5D28CF9372F4E216C0 /* LoomStore.swift */,
 				51DBC9C3DFCC26D8635614FE /* ProviderClient.swift */,
@@ -311,6 +314,7 @@
 			files = (
 				84CE6BFEB1478083D7AC45E3 /* AnswerRenderer.swift in Sources */,
 				2FDA96AD0343822B818C76FF /* BackupView.swift in Sources */,
+				49C162CD30FA55AF811F334B /* CloudBackup.swift in Sources */,
 				C155ABE7BB8CF6FE3CEDA035 /* ComposerView.swift in Sources */,
 				B173F426CE625B6ED2A92C1A /* HistoryView.swift in Sources */,
 				443D3C5F58851EA29261D1F7 /* KeychainStore.swift in Sources */,
@@ -481,7 +485,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 13;
+				CURRENT_PROJECT_VERSION = 14;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = "";
 				ENABLE_NS_ASSERTIONS = NO;
@@ -503,7 +507,7 @@
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.6.0;
+				MARKETING_VERSION = 1.7.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -550,7 +554,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 13;
+				CURRENT_PROJECT_VERSION = 14;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -578,7 +582,7 @@
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.6.0;
+				MARKETING_VERSION = 1.7.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;

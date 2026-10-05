@@ -17,6 +17,7 @@ struct BackupView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var includeKeys = false
     @State private var document = BackupDocument(data: Data())
+    @State private var cloudBusy = false
     @State private var exporting = false
     @State private var importing = false
     @State private var pending: LoomBackup?
@@ -31,19 +32,27 @@ struct BackupView: View {
                     LabeledContent("对话记录", value: "\(store.conversations.count) 条")
                     LabeledContent("模型配置", value: "\(store.configurations.count) 个")
                 } footer: { Text("包含完整对话、高亮、引用和模型配置，以及高亮手势等偏好设置。") }
+                Section { Toggle("同时备份 API Key", isOn: $includeKeys) } footer: {
+                    Text("API Key 默认不包含在备份中；开启后，文件和云端备份都会包含密钥。")
+                }
                 Section {
-                    Toggle("同时备份 API Key", isOn: $includeKeys)
-                    Button("导出到本地或 iCloud", systemImage: "square.and.arrow.up") {
+                    Button("导出到文件", systemImage: "square.and.arrow.up") {
                         do { document = BackupDocument(data: try store.backup(includeKeys: includeKeys)); exporting = true }
                         catch { report(error.localizedDescription) }
                     }.accessibilityIdentifier("backup-export")
-                } footer: {
-                    Text(includeKeys ? "包含 API Key 的备份请存放在你信任的位置。保存时可选择本机或 iCloud 云盘。" : "通过系统文件窗口，选择“我的 iPhone / iPad”或“iCloud 云盘”。API Key 默认不导出。")
-                }
-                Section {
-                    Button("从本地或 iCloud 导入", systemImage: "square.and.arrow.down") { importing = true }
+                    Button("从文件导入", systemImage: "square.and.arrow.down") { importing = true }
                         .accessibilityIdentifier("backup-import")
-                } footer: { Text("导入会替换当前记录和配置；导入前会自动保留一份原始本地记录。不含 API Key 的备份需要在新设备上重新填写密钥。") }
+                } header: { Text("导出到文件") } footer: { Text("通过系统文件窗口保存或选择备份文件。导入会替换当前记录和配置，导入前会自动保留原始本地记录。") }
+                Section {
+                    Button("备份到 iCloud", systemImage: "icloud.and.arrow.up") { cloudOperation(restoring: false) }
+                        .accessibilityIdentifier("backup-cloud-save")
+                    Button("从 iCloud 恢复", systemImage: "icloud.and.arrow.down") { cloudOperation(restoring: true) }
+                        .accessibilityIdentifier("backup-cloud-restore")
+                    if cloudBusy { ProgressView("正在连接 iCloud…") }
+                } header: { Text("iCloud 原生备份") } footer: {
+                    Text(CloudBackup.isEnabled ? "直接保存到你的私有 iCloud 空间，无需选择文件；再次备份会更新云端记录。恢复需要确认后才会替换本机记录。" : "当前签名未开通 iCloud 权限，原生云备份暂不可用。文件备份可正常使用。")
+                }.disabled(cloudBusy)
+
             }
             .navigationTitle("备份")
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
@@ -77,6 +86,25 @@ struct BackupView: View {
                 }
             } message: { Text("将替换为备份中的 \(pending?.state.conversations.count ?? 0) 条对话和 \(pending?.state.configurations.count ?? 0) 个模型配置。") }
             .alert("备份", isPresented: $showStatus) { Button("好", role: .cancel) {} } message: { Text(status ?? "") }
+        }
+    }
+    private func cloudOperation(restoring: Bool) {
+        cloudBusy = true
+        Task {
+            defer { cloudBusy = false }
+            do {
+                if restoring {
+                    let data = try await CloudBackup.shared.load()
+                    let archive = try JSONDecoder().decode(LoomBackup.self, from: data)
+                    try archive.validate()
+                    pending = archive
+                    confirming = true
+                } else {
+                    let data = try store.backup(includeKeys: includeKeys)
+                    _ = try await CloudBackup.shared.save(data)
+                    report("已备份到 iCloud。")
+                }
+            } catch { report(error.localizedDescription) }
         }
     }
     private func report(_ message: String) { status = message; showStatus = true }

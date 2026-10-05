@@ -78,15 +78,33 @@ import UIKit
         app.launch()
         XCTAssertTrue(app.buttons["workspace-menu"].waitForExistence(timeout: 10))
         app.buttons["workspace-menu"].tap()
-        app.buttons["备份（导入 / 导出）"].tap()
+        app.buttons["备份"].tap()
         XCTAssertTrue(app.navigationBars["备份"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["backup-export"].exists)
         XCTAssertTrue(app.buttons["backup-import"].exists)
+        XCTAssertTrue(app.buttons["backup-cloud-save"].exists)
+        XCTAssertTrue(app.buttons["backup-cloud-restore"].exists)
         app.buttons["backup-export"].tap()
         XCTAssertTrue(app.buttons["DOCPicker.actionButton"].waitForExistence(timeout: 5))
         let shot = XCTAttachment(screenshot: app.screenshot())
         shot.lifetime = .keepAlways
         add(shot)
+    }
+
+    func testCloudBackupWithoutEntitlementExplainsAvailability() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--demo"]
+        app.launch()
+        XCTAssertTrue(app.buttons["workspace-menu"].waitForExistence(timeout: 10))
+        app.buttons["workspace-menu"].tap()
+        app.buttons["备份"].tap()
+        XCTAssertTrue(app.buttons["backup-cloud-save"].waitForExistence(timeout: 5))
+        app.buttons["backup-cloud-save"].tap()
+        XCTAssertTrue(app.alerts["备份"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.alerts.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "尚未获得 Apple 的 iCloud 权限")).firstMatch.exists)
+        XCTAssertFalse(app.buttons["DOCPicker.actionButton"].exists)
+        app.alerts.buttons["好"].tap()
+        XCTAssertTrue(app.buttons["backup-export"].exists)
     }
 
     func testPhoneTabsSwipeComposerAndSettings() throws {

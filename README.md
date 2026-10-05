@@ -190,3 +190,13 @@ API Key 为可选备份内容，默认关闭。iCloud 由系统「文件」位�
 
 ![原生菜单与备份入口](docs/native-menu-1.6.0.png)
 ![圆角轮次横杠与系统滚动条](docs/round-indicator-1.6.0.png)
+
+### 1.7.0：备份分类与轮次标记
+
+“更多”菜单统一使用“备份”。备份页面分为“导出到文件”（系统文件导入/导出）和“iCloud 原生备份”（CloudKit 私有数据库，直接备份/恢复）。云端使用一个可更新的最新归档，恢复前仍需确认；API Key 默认不包含。轮次横杠移近系统滚动条，删除装饰竖线，保留原生滚动条拖动和横杠点击/拖动。
+
+原生 iCloud 需要开发者账户开通容器 `iCloud.online.minidesk.loom`、CloudKit 服务和匹配描述文件。当前已安装版本的签名不包含该权限，因此界面明确提示暂不可用，不会把文件导出当成直接云备份。`Configuration/iCloud.entitlements` 提供权限配置；获得匹配签名后，构建时同时设置 `CODE_SIGN_ENTITLEMENTS=Configuration/iCloud.entitlements` 和 `SWIFT_ACTIVE_COMPILATION_CONDITIONS='DEBUG LOOM_ICLOUD'`（Release 使用 `LOOM_ICLOUD`），并在 CloudKit Console 将 `LoomBackup` 类型的 `archive`（Asset）和 `createdAt`（Date/Time）部署至生产环境后再发布正式版。首次开发环境保存可创建 schema；生产环境不能自动创建。
+
+已验证普通版本及启用 `LOOM_ICLOUD` 的模拟器版本编译。真实云端往返验证需在获得 iCloud 签名、登录测试 iCloud 账户后进行。
+
+本轮验证：30 项单元测试、3 项 iPhone 界面测试、4 项 iPad 界面测试通过。包括文件导出、无 iCloud 权限时的明确提示、轮次横杠点击/拖动以及系统滚动条拖动。1.7.0（14）已安装并启动于 iPhone 15 Pro。

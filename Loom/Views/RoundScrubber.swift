@@ -26,6 +26,7 @@ struct RoundScrubber: View {
                                 RoundedRectangle(cornerRadius: 1.5)
                                     .fill(round == (draggedRound ?? currentRound) ? Color.indigo : Color.secondary.opacity(0.6))
                                     .frame(width: round == (draggedRound ?? currentRound) ? 24 : 16, height: 3)
+                                    .offset(x: 8)
                                     .accessibilityHidden(true)
                             }
                             .frame(width: 44, height: step)
@@ -38,9 +39,6 @@ struct RoundScrubber: View {
                     .accessibilityIdentifier("round-tick-\(round)")
                     .accessibilityAddTraits(round == currentRound ? .isSelected : [])
                 }
-            }
-            .background(alignment: .trailing) {
-                Capsule().fill(.secondary.opacity(0.15)).frame(width: 2).padding(.vertical, step / 2).padding(.trailing, 7)
             }
             .frame(width: 44, height: height)
             .contentShape(.rect)

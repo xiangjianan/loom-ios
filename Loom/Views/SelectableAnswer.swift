@@ -238,7 +238,7 @@ struct VerticalReaderScrollLock: UIViewRepresentable {
 }
 
 /// Observe at the window so UIKit's indicator accessory cannot swallow the drag.
-/// Only a touch beginning in this reader's trailing 18 points is claimed.
+/// Only a touch beginning in this reader's trailing 12 points is claimed.
 private final class IndicatorTouchObserver: UIGestureRecognizer {
     weak var scroll: UIScrollView?
     var onScrubbing: (Bool) -> Void
@@ -264,7 +264,7 @@ private final class IndicatorTouchObserver: UIGestureRecognizer {
             if current is UIControl { return }
             ancestor = current.superview
         }
-        guard frame.contains(point), point.x >= frame.maxX - 18,
+        guard frame.contains(point), point.x >= frame.maxX - 12,
               scroll.contentSize.height > scroll.bounds.height else { return }
         eligible = true
         let inset = scroll.adjustedContentInset

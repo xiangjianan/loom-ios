@@ -22,7 +22,7 @@ struct WorkspaceMenu: UIViewRepresentable {
             UIAction(title: "新对话", image: UIImage(systemName: "square.and.pencil")) { _ in newConversation() },
             UIAction(title: "历史对话", image: UIImage(systemName: "clock")) { _ in history() },
             UIAction(title: "模型设置", image: UIImage(systemName: "slider.horizontal.3")) { _ in settings() },
-            UIAction(title: "备份（导入 / 导出）", image: UIImage(systemName: "externaldrive")) { _ in backup() }
+            UIAction(title: "备份", image: UIImage(systemName: "externaldrive")) { _ in backup() }
         ])
     }
     final class MenuButton: UIButton {

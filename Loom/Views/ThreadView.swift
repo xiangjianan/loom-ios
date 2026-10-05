@@ -118,7 +118,7 @@ struct ThreadView: View {
                         scrubbing = active
                         if active { revealRail() } else { scheduleRailHide() }
                     }
-                    .padding(.trailing, 18)
+                    .padding(.trailing, 12)
                     .transition(.opacity)
                 }
             }

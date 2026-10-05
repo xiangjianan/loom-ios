@@ -16,7 +16,7 @@ struct ComposerView: View {
                                 }
                                 Button { store.removeQuote(quote.id) } label: { Image(systemName: "xmark.circle.fill") }
                                     .foregroundStyle(.secondary).accessibilityLabel("移除引用：\(quote.text)")
-                            }.padding(10).background(.yellow.opacity(0.9), in: .rect(cornerRadius: 14))
+                            }.padding(10).background(Color("QuoteYellow").opacity(0.9), in: .rect(cornerRadius: 14))
                         }
                     }.padding(.horizontal, 4)
                 }.scrollIndicators(.hidden).accessibilityIdentifier("quote-tray")
@@ -35,7 +35,7 @@ struct ComposerView: View {
                     Image(systemName: store.isWorking ? "stop.fill" : "arrow.up")
                         .font(.system(size: 18, weight: .semibold)).frame(width: 44, height: 44)
                         .foregroundStyle(.white)
-                        .background(store.isWorking || !store.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Color.indigo : Color.secondary.opacity(0.35), in: .circle)
+                        .background(store.isWorking || !store.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Color.blue : Color.secondary.opacity(0.35), in: .circle)
                 }
                 .buttonStyle(.plain)
                 .disabled(!store.isWorking && store.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)

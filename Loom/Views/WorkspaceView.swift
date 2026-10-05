@@ -105,13 +105,8 @@ struct WorkspaceView: View {
                         .accessibilityHidden(true)
                 }
                 .simultaneousGesture(
-                    DragGesture(minimumDistance: 16)
-                        .onChanged { value in
-                            guard drawerVisible, sheet == nil,
-                                  value.translation.width < -48,
-                                  abs(value.translation.width) > abs(value.translation.height) * 1.2 else { return }
-                            closeDrawer()
-                        }
+                    drawerGesture(width: drawerWidth, opening: false),
+                    including: drawerVisible && sheet == nil ? .all : .none
                 )
                 .mask { Rectangle().ignoresSafeArea() }
 
@@ -160,7 +155,11 @@ struct WorkspaceView: View {
             .updating($draggingDrawer) { _, active, _ in active = true }
             .onChanged { value in
                 guard abs(value.translation.width) > abs(value.translation.height) else { return }
-                drawerProgress = min(1, max(0, (opening ? 0 : 1) + value.translation.width / width))
+                var transaction = Transaction(animation: nil)
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    drawerProgress = min(1, max(0, (opening ? 0 : 1) + value.translation.width / width))
+                }
             }
             .onEnded { value in
                 let horizontal = abs(value.translation.width) > abs(value.translation.height)
@@ -188,13 +187,13 @@ struct WorkspaceView: View {
                                 withAnimation(reduceMotion ? nil : .snappy(duration: 0.25)) { store.selectedModel = thread.id }
                             } label: {
                                 HStack(spacing: 7) {
-                                    Circle().fill(selected ? Color.indigo : Color.secondary.opacity(0.4)).frame(width: 6, height: 6)
+                                    Circle().fill(selected ? Color.blue : Color.secondary.opacity(0.4)).frame(width: 6, height: 6)
                                     Text(thread.configuration.name).font(.subheadline.weight(selected ? .semibold : .medium))
                                     if store.busyModels.contains(thread.id) { ProgressView().controlSize(.mini) }
                                 }
                                 .padding(.horizontal, 17).frame(minHeight: 44)
-                                .foregroundStyle(selected ? .indigo : .primary)
-                                .glassEffect(.regular.tint(selected ? .indigo.opacity(0.08) : .clear).interactive(), in: .capsule)
+                                .foregroundStyle(selected ? .blue : .primary)
+                                .glassEffect(.regular.tint(selected ? .blue.opacity(0.08) : .clear).interactive(), in: .capsule)
                                 .glassEffectID(thread.id, in: tabsNamespace)
                             }
                             .buttonStyle(.plain)
@@ -277,7 +276,7 @@ struct MessageView: View {
             } else if message.role == "user" {
                 Text(message.display ?? message.content)
                     .font(.body).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(16).background(.indigo.opacity(0.07), in: .rect(cornerRadius: 18))
+                    .padding(16).background(.blue.opacity(0.07), in: .rect(cornerRadius: 18))
                 if let references = message.references, !references.isEmpty {
                     DisclosureGroup(isExpanded: $referencesExpanded) {
                         VStack(alignment: .leading, spacing: 12) {
@@ -317,7 +316,7 @@ private struct TopBarGlass: View {
         GeometryReader { geometry in
             Rectangle()
                 .fill(.clear)
-                .frame(height: geometry.size.height + safeAreaHeight)
+                .frame(height: geometry.size.height + safeAreaHeight + 4)
                 .glassEffect(.regular, in: .rect(cornerRadius: 0))
                 .opacity(0.82)
                 .clipped()

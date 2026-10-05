@@ -17,7 +17,7 @@ struct SettingsView: View {
                             ModelEditor(store: store, configuration: configuration)
                         } label: {
                             HStack(spacing: 12) {
-                                Image(systemName: "sparkle").foregroundStyle(.indigo)
+                                Image(systemName: "sparkle").foregroundStyle(.blue)
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(configuration.name)
                                     Text(configuration.model.isEmpty ? "尚未配置" : configuration.model)

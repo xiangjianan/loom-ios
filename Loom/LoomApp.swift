@@ -7,7 +7,7 @@ struct LoomApp: App {
         session: previewSession()
     )
     var body: some Scene {
-        WindowGroup { WorkspaceView(store: store).tint(.indigo) }
+        WindowGroup { WorkspaceView(store: store).tint(.blue) }
     }
 }
 

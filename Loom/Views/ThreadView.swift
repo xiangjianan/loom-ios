@@ -140,13 +140,13 @@ struct ThreadView: View {
 
     private var emptyState: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Image(systemName: "square.stack.3d.up").font(.system(size: 34, weight: .light)).foregroundStyle(.indigo)
+            Image(systemName: "square.stack.3d.up").font(.system(size: 34, weight: .light)).foregroundStyle(.blue)
                 .padding(.top, 50)
             Text("让不同的观点\n在这里交织。")
                 .font(.system(.largeTitle, design: .rounded, weight: .semibold))
             Text("一次提问，同时听见多个模型的回答。\n选中有用的文字，带着它继续思考。")
                 .font(.body).foregroundStyle(.secondary).lineSpacing(6)
-            Label(thread.configuration.name, systemImage: "sparkle").font(.subheadline.weight(.medium)).foregroundStyle(.indigo)
+            Label(thread.configuration.name, systemImage: "sparkle").font(.subheadline.weight(.medium)).foregroundStyle(.blue)
             if thread.configuration.model.isEmpty {
                 Text("开始前，请打开左上角会话侧栏中的模型设置，填写模型型号和 API Key。")
                     .font(.footnote).foregroundStyle(.secondary).padding(.top, 12)

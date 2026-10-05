@@ -22,7 +22,7 @@ struct RoundScrubber: View {
                         Color.clear
                             .overlay(alignment: .leading) {
                                 RoundedRectangle(cornerRadius: 1.5)
-                                    .fill(round == (draggedRound ?? interaction.currentRound) ? Color.indigo : Color.secondary.opacity(0.6))
+                                    .fill(round == (draggedRound ?? interaction.currentRound) ? Color.blue : Color.secondary.opacity(0.6))
                                     .frame(width: round == (draggedRound ?? interaction.currentRound) ? 20 : 12, height: 3)
                                     .padding(.leading, 6)
                                     .accessibilityHidden(true)

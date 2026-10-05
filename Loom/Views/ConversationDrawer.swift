@@ -24,10 +24,6 @@ struct ConversationDrawer: View {
         GlassEffectContainer(spacing: 16) {
         VStack(spacing: 16) {
             HStack(spacing: 10) {
-                Image("LoomLogo")
-                    .resizable().scaledToFit().frame(width: 36, height: 36)
-                    .clipShape(.rect(cornerRadius: 9))
-                    .accessibilityHidden(true)
                 Text("Loom").font(.title2.bold())
                 Spacer()
                 Button {

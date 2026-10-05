@@ -16,7 +16,7 @@ struct ComposerView: View {
                                 }
                                 Button { store.removeQuote(quote.id) } label: { Image(systemName: "xmark.circle.fill") }
                                     .foregroundStyle(.secondary).accessibilityLabel("移除引用：\(quote.text)")
-                            }.padding(10).background(.yellow.opacity(0.42), in: .rect(cornerRadius: 14))
+                            }.padding(10).background(.yellow.opacity(0.9), in: .rect(cornerRadius: 14))
                         }
                     }.padding(.horizontal, 4)
                 }.scrollIndicators(.hidden).accessibilityIdentifier("quote-tray")

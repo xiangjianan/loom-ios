@@ -108,12 +108,21 @@ import UIKit
         let menu = app.buttons["workspace-menu"]
         XCTAssertTrue(menu.waitForExistence(timeout: 10))
         menu.tap()
+        let chat = app.buttons["drawer-new-conversation"]
+        let settings = app.buttons["drawer-settings"]
+        let chatY = chat.frame.minY
+        let settingsY = settings.frame.minY
         app.buttons["drawer-search-button"].tap()
         let search = app.textFields["drawer-search"]
         XCTAssertTrue(search.waitForExistence(timeout: 5))
         search.tap()
         search.typeText("不同")
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+        XCTAssertEqual(chat.frame.minY, chatY, accuracy: 2)
+        XCTAssertEqual(settings.frame.minY, settingsY, accuracy: 2)
+        let keyboardShot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        keyboardShot.lifetime = .keepAlways
+        add(keyboardShot)
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.45, dy: 0.28))
             .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.45, dy: 0.48)))
         let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in !app.keyboards.firstMatch.exists }, object: app)

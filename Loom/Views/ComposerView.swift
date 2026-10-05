@@ -43,7 +43,7 @@ struct ComposerView: View {
                 .accessibilityIdentifier("send-button")
             }
             .padding(6)
-            .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 28))
+            .glassEffect(.clear.interactive(), in: .rect(cornerRadius: 28))
         }
         .padding(.horizontal, 12).padding(.top, 6).padding(.bottom, 4)
         .frame(maxWidth: 1100).frame(maxWidth: .infinity)

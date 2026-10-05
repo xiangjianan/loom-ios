@@ -70,14 +70,18 @@ struct WorkspaceView: View {
                         modelTabs
                     }
                     .padding(.vertical, 4)
+                    .padding(.bottom, 10)
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { topBarHeight = $0 }
                     .background { ReadingBarGlass(edge: .top, safeAreaHeight: geometry.safeAreaInsets.top) }
                     .overlay(alignment: .bottom) {
                         Rectangle().fill(.clear)
-                            .frame(height: 3)
-                            .glassEffect(.clear, in: .capsule)
+                            .frame(height: 12)
+                            .glassEffect(.regular, in: .rect(cornerRadius: 0))
                             .mask {
                                 LinearGradient(colors: [.clear, .black, .black, .clear], startPoint: .leading, endPoint: .trailing)
+                                    .mask {
+                                        LinearGradient(colors: [.clear, .black, .clear], startPoint: .top, endPoint: .bottom)
+                                    }
                             }
                             .padding(.horizontal, 12)
                             .allowsHitTesting(false)
@@ -89,7 +93,6 @@ struct WorkspaceView: View {
                 .overlay(alignment: .bottom) {
                     ComposerView(store: store, focus: $composerFocused)
                         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { bottomBarHeight = $0 }
-                        .background { ReadingBarGlass(edge: .bottom, safeAreaHeight: geometry.safeAreaInsets.bottom) }
                         .allowsHitTesting(!drawerVisible)
                         .accessibilityHidden(drawerVisible)
                 }
@@ -120,6 +123,8 @@ struct WorkspaceView: View {
 
 
             }
+            // Search keeps the drawer and the revealed page pinned behind the keyboard.
+            .ignoresSafeArea(.keyboard, edges: drawerVisible ? .bottom : [])
             .onChange(of: draggingDrawer) { _, active in
                 if !active, drawerProgress != 0, drawerProgress != 1 { setDrawer(drawerVisible) }
             }

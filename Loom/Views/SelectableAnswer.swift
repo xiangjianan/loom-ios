@@ -185,19 +185,32 @@ final class ReadingTextView: UITextView {
     }
 }
 
+@MainActor final class ReaderScrollController {
+    weak var scroll: UIScrollView?
+    private var pendingOffset: CGFloat?
+    func restore(_ offset: CGFloat) {
+        guard let scroll else { pendingOffset = offset; return }
+        scroll.setContentOffset(CGPoint(x: 0, y: offset), animated: false)
+    }
+    func attach(_ scroll: UIScrollView) {
+        self.scroll = scroll
+        if let pendingOffset { self.pendingOffset = nil; restore(pendingOffset) }
+
+    }
+}
+
 /// Keep the vertical reader from acquiring a horizontal offset during native
 /// selection, round jumps, or restoration inside the horizontal model pager.
 struct VerticalReaderScrollLock: UIViewRepresentable {
-    var onIndicatorScrubbing: (Bool) -> Void = { _ in }
+    var controller: ReaderScrollController
     func makeUIView(context: Context) -> LockView { LockView() }
-    func updateUIView(_ uiView: LockView, context: Context) { uiView.onIndicatorScrubbing = onIndicatorScrubbing; uiView.connect() }
+    func updateUIView(_ uiView: LockView, context: Context) { uiView.controller = controller; uiView.connect() }
     static func dismantleUIView(_ uiView: LockView, coordinator: ()) { uiView.disconnect() }
 
     final class LockView: UIView {
+        weak var controller: ReaderScrollController?
         var observation: NSKeyValueObservation?
         weak var reader: UIScrollView?
-        private var indicatorObserver: IndicatorTouchObserver?
-        var onIndicatorScrubbing: (Bool) -> Void = { _ in }
         override func didMoveToWindow() {
             super.didMoveToWindow()
             if window == nil { disconnect() }
@@ -205,24 +218,19 @@ struct VerticalReaderScrollLock: UIViewRepresentable {
         }
         func disconnect() {
             observation?.invalidate(); observation = nil
-            if let indicatorObserver { indicatorObserver.view?.removeGestureRecognizer(indicatorObserver) }
-            indicatorObserver = nil; reader = nil
+            reader = nil
         }
         func connect() {
             guard window != nil else { return }
             var ancestor = superview
             while let view = ancestor {
-                if let scroll = view as? UIScrollView {
+                if let scroll = view as? UIScrollView, !scroll.isPagingEnabled, scroll.showsVerticalScrollIndicator {
                     guard reader !== scroll else { return }
                     disconnect()
                     reader = scroll
+                    controller?.attach(scroll)
                     scroll.alwaysBounceHorizontal = false
                     scroll.isDirectionalLockEnabled = true
-                    let observer = IndicatorTouchObserver(scroll: scroll) { [weak self] active in
-                        self?.onIndicatorScrubbing(active)
-                    }
-                    window?.addGestureRecognizer(observer)
-                    indicatorObserver = observer
                     observation = scroll.observe(\.contentOffset, options: [.initial, .new]) { [weak scroll] _, _ in
                         MainActor.assumeIsolated {
                             guard let scroll, abs(scroll.contentOffset.x) > 0.1 else { return }
@@ -234,68 +242,5 @@ struct VerticalReaderScrollLock: UIViewRepresentable {
                 ancestor = view.superview
             }
         }
-    }
-}
-
-/// Observe at the window so UIKit's indicator accessory cannot swallow the drag.
-/// Only a touch beginning in this reader's trailing 12 points is claimed.
-private final class IndicatorTouchObserver: UIGestureRecognizer {
-    weak var scroll: UIScrollView?
-    var onScrubbing: (Bool) -> Void
-    private var originY: CGFloat = 0
-    private var initialOffset: CGFloat = 0
-    private var scale: CGFloat = 0
-    private var eligible = false
-    init(scroll: UIScrollView, onScrubbing: @escaping (Bool) -> Void) {
-        self.scroll = scroll; self.onScrubbing = onScrubbing
-        super.init(target: nil, action: nil)
-    }
-    override func canBePrevented(by preventingGestureRecognizer: UIGestureRecognizer) -> Bool { false }
-    override func canPrevent(_ preventedGestureRecognizer: UIGestureRecognizer) -> Bool { eligible }
-    override func reset() { super.reset(); eligible = false }
-    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
-        guard let scroll, let window = scroll.window, let touch = touches.first else { state = .failed; return }
-        // Sheets, floating bars and the composer share the window, but are not reader content.
-        guard touch.view?.isDescendant(of: scroll) == true else { return }
-        let point = touch.location(in: window)
-        let frame = scroll.convert(scroll.bounds, to: window)
-        var ancestor = touch.view
-        while let current = ancestor {
-            if current is UIControl { return }
-            ancestor = current.superview
-        }
-        guard frame.contains(point), point.x >= frame.maxX - 12,
-              scroll.contentSize.height > scroll.bounds.height else { return }
-        eligible = true
-        let inset = scroll.adjustedContentInset
-        let maximum = max(0, scroll.contentSize.height + inset.top + inset.bottom - scroll.bounds.height)
-        let track = max(1, scroll.bounds.height - scroll.verticalScrollIndicatorInsets.top - scroll.verticalScrollIndicatorInsets.bottom)
-        let thumb = min(track, max(24, track * scroll.bounds.height / (scroll.contentSize.height + inset.top + inset.bottom)))
-        originY = point.y
-        initialOffset = scroll.contentOffset.y
-        scale = maximum / max(1, track - thumb)
-        scroll.setContentOffset(scroll.contentOffset, animated: false)
-        state = .began
-        onScrubbing(true)
-        scroll.flashScrollIndicators()
-    }
-    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
-        guard state == .began || state == .changed, let scroll, let window = scroll.window, let touch = touches.first else { return }
-        let inset = scroll.adjustedContentInset
-        let minimum = -inset.top
-        let maximum = max(minimum, scroll.contentSize.height - scroll.bounds.height + inset.bottom)
-        let offset = min(maximum, max(minimum, initialOffset + (touch.location(in: window).y - originY) * scale))
-        scroll.withScrollIndicatorsShown(forContentOffsetChanges: {
-            scroll.setContentOffset(CGPoint(x: 0, y: offset), animated: false)
-        })
-        state = .changed
-    }
-    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) {
-        if state == .began || state == .changed { onScrubbing(false); state = .ended }
-        else { state = .failed }
-    }
-    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) {
-        if state == .began || state == .changed { onScrubbing(false) }
-        state = .cancelled
     }
 }

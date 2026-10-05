@@ -11,14 +11,15 @@ struct ThreadView: View {
     @State private var currentRound = 1
     @State private var roundPositionTask: Task<Void, Never>?
     @State private var railVisible = false
-    @State private var indicatorFlash = 0
     @State private var scrubbing = false
     @State private var railHideTask: Task<Void, Never>?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var onReadingScroll: (Bool) -> Void = { _ in }
     @State private var scrollPhase: ScrollPhase = .idle
     @State private var scrollTravel: CGFloat = 0
-    @State private var liveTopInset: CGFloat = 0
+    @State private var userScrolling = false
+    @State private var userScrollEndTask: Task<Void, Never>?
+    @State private var reader = ReaderScrollController()
 
     var body: some View {
         GeometryReader { viewport in
@@ -40,56 +41,54 @@ struct ThreadView: View {
                 .padding(.horizontal, 24).padding(.top, contentTopPadding).padding(.bottom, 24)
                 .frame(width: min(760, viewport.size.width), alignment: .leading)
                 .frame(width: viewport.size.width, alignment: .center)
-                .background(VerticalReaderScrollLock { active in
-                    scrubbing = active
-                    if active { roundPositionTask?.cancel(); revealRail() } else { scheduleRailHide() }
-                }.allowsHitTesting(false).accessibilityHidden(true))
+                .background(VerticalReaderScrollLock(controller: reader).allowsHitTesting(false).accessibilityHidden(true))
             }
             .contentMargins(.top, readingInsets.top, for: .scrollContent)
             .contentMargins(.bottom, readingInsets.bottom, for: .scrollContent)
             .scrollPosition($position)
             .scrollIndicators(.visible, axes: .vertical)
-            .scrollIndicatorsFlash(trigger: indicatorFlash)
-            .task(id: railVisible) {
-                guard railVisible else { return }
-                // Keep the native thumb available for the same interval as the round rail.
-                while !Task.isCancelled {
-                    if scrollPhase == .idle, !scrubbing { indicatorFlash += 1 }
-                    try? await Task.sleep(for: .milliseconds(650))
-                }
-            }
-            .onChange(of: readingInsets.top, initial: true) { _, inset in liveTopInset = inset }
             .task(id: isActive) {
                 guard isActive else { return }
                 if let id = store.takeRoundStart(for: thread.id) { revealRoundStart(id); return }
                 let offset = savedOffset
-                guard offset > 0 else { return }
-                // ScrollPosition addresses content coordinates, excluding the reading inset and stack padding.
-                position.scrollTo(y: offset - liveTopInset - contentTopPadding)
+                guard offset != 0 else { return }
+                // Restore UIKit's raw offset, independent of SwiftUI content-margin coordinates.
+                reader.restore(offset)
                 // Paging and the reading bars resize together; restore after they settle.
                 try? await Task.sleep(for: .milliseconds(360))
                 guard !Task.isCancelled, scrollPhase == .idle else { return }
-                position.scrollTo(y: offset - liveTopInset - contentTopPadding)
+                reader.restore(offset)
             }
             .onScrollPhaseChange { _, phase in
                 scrollPhase = phase
-                if phase == .interacting {
+                if phase == .interacting || phase == .tracking {
+                    userScrollEndTask?.cancel()
+                    userScrolling = true
                     roundPositionTask?.cancel()
                     scrollTravel = 0
                     revealRail()
                 }
-                if phase == .idle { scheduleRailHide() }
+                if phase == .idle {
+                    // SwiftUI can deliver the final geometry update after the idle phase.
+                    userScrollEndTask?.cancel()
+                    userScrollEndTask = Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(150))
+                        guard !Task.isCancelled else { return }
+                        userScrolling = false
+                    }
+                    scheduleRailHide()
+                }
             }
             .onScrollGeometryChange(for: CGFloat.self) { geometry in
                 let maximum = max(0, geometry.contentSize.height - geometry.containerSize.height + geometry.contentInsets.bottom)
-                return min(maximum, max(0, geometry.contentOffset.y))
+                return min(maximum, max(-geometry.contentInsets.top, geometry.contentOffset.y))
             } action: { old, new in
-                if isActive, scrubbing || scrollPhase == .interacting || scrollPhase == .decelerating || scrollPhase == .animating {
+                if isActive, scrubbing || scrollPhase == .tracking || scrollPhase == .interacting || scrollPhase == .decelerating || scrollPhase == .animating {
                     savedOffset = new
                 }
-                guard scrollPhase == .interacting else { return }
+                guard userScrolling else { return }
                 let delta = new - old
-                guard abs(delta) > 0.5 else { return }
+                guard abs(delta) > 0.01 else { return }
                 if delta * scrollTravel < 0 { scrollTravel = 0 }
                 scrollTravel += delta
                 if abs(scrollTravel) > 24 {
@@ -99,11 +98,12 @@ struct ThreadView: View {
             }
             .scrollDismissesKeyboard(.interactively)
             .accessibilityIdentifier("thread-\(thread.configuration.name)")
-            .overlay(alignment: .trailing) {
+            .overlay(alignment: .leading) {
                 let rounds = Array(Set(thread.messages.map(\.round))).sorted()
                 if rounds.count > 1, railVisible {
                     RoundScrubber(rounds: rounds, currentRound: currentRound) { round, dragging in
                         if let message = thread.messages.first(where: { $0.round == round }) {
+                            userScrollEndTask?.cancel(); userScrolling = false
                             currentRound = round
                             let jump = {
                                 if round == rounds.first { position.scrollTo(edge: .top) }
@@ -118,7 +118,7 @@ struct ThreadView: View {
                         scrubbing = active
                         if active { revealRail() } else { scheduleRailHide() }
                     }
-                    .padding(.trailing, 12)
+                    .padding(.leading, 0)
                     .transition(.opacity)
                 }
             }
@@ -127,11 +127,12 @@ struct ThreadView: View {
                     revealRoundStart(target)
                 }
             }
-            .onDisappear { railHideTask?.cancel(); roundPositionTask?.cancel() }
+            .onDisappear { railHideTask?.cancel(); roundPositionTask?.cancel(); userScrollEndTask?.cancel() }
 
         }
     }
     private func revealRoundStart(_ messageID: UUID) {
+        userScrollEndTask?.cancel(); userScrolling = false
         if let message = thread.messages.first(where: { $0.id == messageID }) { currentRound = message.round }
         withAnimation(reduceMotion ? nil : .smooth(duration: 0.3)) {
             position.scrollTo(id: messageID, anchor: .top)
@@ -171,7 +172,7 @@ struct ThreadView: View {
                 .font(.body).foregroundStyle(.secondary).lineSpacing(6)
             Label(thread.configuration.name, systemImage: "sparkle").font(.subheadline.weight(.medium)).foregroundStyle(.indigo)
             if thread.configuration.model.isEmpty {
-                Text("开始前，请点右上角设置，填写模型型号和 API Key。")
+                Text("开始前，请打开左上角会话侧栏中的模型设置，填写模型型号和 API Key。")
                     .font(.footnote).foregroundStyle(.secondary).padding(.top, 12)
             }
         }.padding(.bottom, 30).frame(maxWidth: .infinity, alignment: .leading)

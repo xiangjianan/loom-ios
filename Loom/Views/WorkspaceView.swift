@@ -1,24 +1,31 @@
 import SwiftUI
 
-private enum WorkspaceSheet: String, Identifiable { case settings, history, backup; var id: String { rawValue } }
+private enum WorkspaceSheet: String, Identifiable { case settings, backup; var id: String { rawValue } }
 
 struct WorkspaceView: View {
     @Bindable var store: LoomStore
     @State private var readingOffsets: [UUID: [UUID: CGFloat]] = [:]
     @State private var sheet: WorkspaceSheet?
+    @State private var drawerVisible = false
+    @State private var pageSelection: UUID
     @State private var showNewConfirmation = false
     @State private var readingChromeVisible = true
     @State private var topBarHeight: CGFloat = 60
     @State private var bottomBarHeight: CGFloat = 66
-    @State private var chromeChangedAt = Date.distantPast
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Namespace private var tabsNamespace
+
+    init(store: LoomStore) {
+        self.store = store
+        _pageSelection = State(initialValue: store.selectedModel)
+    }
 
     var body: some View {
         NavigationStack {
             GeometryReader { geometry in
                 let parallel = geometry.size.width >= 700
-                let readingInsets = EdgeInsets(top: readingChromeVisible ? geometry.safeAreaInsets.top + topBarHeight : 0, leading: 0, bottom: readingChromeVisible ? geometry.safeAreaInsets.bottom + bottomBarHeight : 0, trailing: 0)
+                // Chrome only moves visually; it never resizes the reader or changes its content insets.
+                let readingInsets = EdgeInsets(top: geometry.safeAreaInsets.top + topBarHeight, leading: 0, bottom: geometry.safeAreaInsets.bottom + bottomBarHeight, trailing: 0)
                 ZStack {
                     Color(uiColor: .systemGroupedBackground).ignoresSafeArea()
                     if parallel { parallelBoard(width: geometry.size.width, readingInsets: readingInsets) }
@@ -45,39 +52,80 @@ struct WorkspaceView: View {
                             .transition(.opacity)
                     }
                 }
-                .safeAreaBar(edge: .top, spacing: 0) {
-                    if readingChromeVisible {
-                        HStack(spacing: 8) {
-                            modelTabs
-                            WorkspaceMenu(newConversation: {
+                .overlay(alignment: .top) {
+                    HStack(spacing: 0) {
+                        Button {
+                            setReadingChrome(true)
+                            withAnimation(reduceMotion ? nil : .smooth(duration: 0.28)) { drawerVisible = true }
+                        } label: {
+                            VStack(alignment: .leading, spacing: 5) {
+                                Capsule().frame(width: 22, height: 2)
+                                Capsule().frame(width: 16, height: 2)
+                            }.frame(width: 44, height: 44).contentShape(.rect)
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.primary)
+                        .glassEffect(.regular.interactive(), in: .circle)
+                        .accessibilityLabel("打开会话侧栏")
+                        .accessibilityIdentifier("workspace-menu")
+                        .padding(.leading, 12)
+                        modelTabs
+                    }
+                    .padding(.vertical, 4)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { topBarHeight = $0 }
+                    .background { ReadingBarGlass(edge: .top, safeAreaHeight: geometry.safeAreaInsets.top) }
+                    .offset(y: readingChromeVisible ? 0 : -(topBarHeight + geometry.safeAreaInsets.top + 20))
+                    .opacity(readingChromeVisible ? 1 : 0)
+                    .allowsHitTesting(readingChromeVisible && !drawerVisible)
+                    .accessibilityHidden(!readingChromeVisible || drawerVisible)
+                }
+                .overlay(alignment: .bottom) {
+                    ComposerView(store: store)
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { bottomBarHeight = $0 }
+                        .background { ReadingBarGlass(edge: .bottom, safeAreaHeight: geometry.safeAreaInsets.bottom) }
+                        .offset(y: readingChromeVisible ? 0 : bottomBarHeight + geometry.safeAreaInsets.bottom + 20)
+                        .opacity(readingChromeVisible ? 1 : 0)
+                        .allowsHitTesting(readingChromeVisible && !drawerVisible)
+                        .accessibilityHidden(!readingChromeVisible || drawerVisible)
+                }
+                .overlay {
+                    if drawerVisible {
+                        ZStack(alignment: .leading) {
+                            Color.black.opacity(0.2)
+                                .ignoresSafeArea()
+                                .onTapGesture { closeDrawer() }
+                                .accessibilityLabel("关闭会话侧栏")
+                                .accessibilityAddTraits(.isButton)
+                                .accessibilityIdentifier("drawer-backdrop")
+                            ConversationDrawer(store: store, newConversation: {
+                                closeDrawer()
                                 if store.isWorking { showNewConfirmation = true } else { store.newConversation() }
-                            }, history: { sheet = .history }, settings: { sheet = .settings }, backup: { sheet = .backup })
-                            .frame(width: 44, height: 44)
-                            .glassEffect(.regular.interactive(), in: .circle)
-                            .padding(.trailing, 12)
-                        }.padding(.vertical, 4)
-                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { topBarHeight = $0 }
-                        .background { ReadingBarGlass(edge: .top, safeAreaHeight: geometry.safeAreaInsets.top) }
-                        .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
+                            }, close: closeDrawer, settings: { closeDrawer(); sheet = .settings }, backup: { closeDrawer(); sheet = .backup })
+                                .frame(width: min(360, geometry.size.width * 0.86))
+                                .frame(maxHeight: .infinity)
+                                .background(Color(uiColor: .systemGroupedBackground).opacity(0.65))
+                                .glassEffect(.regular, in: .rect(cornerRadius: 0))
+                                .transition(reduceMotion ? .opacity : .move(edge: .leading).combined(with: .opacity))
+                                .accessibilityAddTraits(.isModal)
+                        }.transition(.opacity)
+                        .zIndex(10)
                     }
                 }
-                .safeAreaBar(edge: .bottom, spacing: 0) {
-                    if readingChromeVisible {
-                        ComposerView(store: store)
-                            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { bottomBarHeight = $0 }
-                            .background { ReadingBarGlass(edge: .bottom, safeAreaHeight: geometry.safeAreaInsets.bottom) }
-                            .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
-                    }
-                }
+
             }
-            .onChange(of: store.selectedModel) { _, _ in setReadingChrome(true) }
+            .onChange(of: store.selectedModel) { _, id in
+                if pageSelection != id { pageSelection = id }
+                setReadingChrome(true)
+            }
+            .onChange(of: pageSelection) { _, id in
+                if store.selectedModel != id { store.selectedModel = id }
+            }
             .sensoryFeedback(.selection, trigger: store.selectedModel)
             .onChange(of: store.selectedConversation) { _, _ in setReadingChrome(true) }
             .toolbar(.hidden, for: .navigationBar)
             .sheet(item: $sheet) { destination in
                 switch destination {
                 case .settings: SettingsView(store: store)
-                case .history: HistoryView(store: store)
                 case .backup: BackupView(store: store)
                 }
             }
@@ -90,6 +138,10 @@ struct WorkspaceView: View {
         }
     }
 
+    private func closeDrawer() {
+        withAnimation(reduceMotion ? nil : .smooth(duration: 0.28)) { drawerVisible = false }
+    }
+
     private func readingOffset(for threadID: UUID) -> Binding<CGFloat> {
         let conversationID = store.selectedConversation
         return Binding(
@@ -100,15 +152,12 @@ struct WorkspaceView: View {
 
     private func setReadingChrome(_ visible: Bool) {
         guard readingChromeVisible != visible else { return }
-        chromeChangedAt = Date()
         withAnimation(reduceMotion ? .easeInOut(duration: 0.15) : .smooth(duration: 0.32)) {
             readingChromeVisible = visible
         }
     }
 
     private func readingScrolled(_ forward: Bool) {
-        // Ignore geometry changes caused by the bars' own transition.
-        guard Date().timeIntervalSince(chromeChangedAt) > 0.4 else { return }
         setReadingChrome(!forward)
     }
 
@@ -136,6 +185,7 @@ struct WorkspaceView: View {
                             .accessibilityAddTraits(selected ? .isSelected : [])
                             .accessibilityLabel("\(thread.configuration.name)，\(selected ? "已选择" : "切换模型")")
                             .accessibilityIdentifier("model-tab-\(thread.configuration.name)")
+                            .accessibilityHidden(!readingChromeVisible || drawerVisible)
                             .id(thread.id)
                         }
                     }.padding(.leading, 12).padding(.trailing, 4)
@@ -149,9 +199,9 @@ struct WorkspaceView: View {
     }
 
     private func phoneBoard(readingInsets: EdgeInsets) -> some View {
-        TabView(selection: $store.selectedModel) {
+        TabView(selection: $pageSelection) {
             ForEach(store.current.threads) { thread in
-                ThreadView(thread: thread, store: store, readingInsets: readingInsets, savedOffset: readingOffset(for: thread.id), isActive: store.selectedModel == thread.id, onReadingScroll: readingScrolled)
+                ThreadView(thread: thread, store: store, readingInsets: readingInsets, savedOffset: readingOffset(for: thread.id), isActive: pageSelection == thread.id, onReadingScroll: readingScrolled)
                     .tag(thread.id)
             }
         }

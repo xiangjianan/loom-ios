@@ -30,7 +30,7 @@ import UIKit
         }, object: second)], timeout: 5) == .completed)
     }
 
-    func testNativeScrollIndicatorRemainsDraggableBesideRoundTicks() {
+    func testNativeIndicatorAndLeftRoundRailUseOppositeEdges() {
         let app = XCUIApplication()
         app.launchArguments = ["--demo", "--demo-rounds"]
         app.launch()
@@ -41,19 +41,66 @@ import UIKit
         XCTAssertTrue(indicator.waitForExistence(timeout: 3))
         let thumb = indicator.children(matching: .other).firstMatch
         let target = thumb.exists ? thumb : indicator
-        let first = reader.staticTexts["继续讨论第1轮的问题"]
-        let previous = first.frame.minY
-        let before = XCTAttachment(screenshot: app.screenshot()); before.lifetime = .keepAlways; add(before)
-        // The system paints a 3 pt thumb; use its expanded finger hit region.
-        let origin = app.coordinate(withNormalizedOffset: .zero)
-        let start = origin.withOffset(CGVector(dx: target.frame.midX - 6, dy: target.frame.midY))
-        let end = origin.withOffset(CGVector(dx: target.frame.midX - 6, dy: reader.frame.minY + reader.frame.height * 0.8))
-        start.press(forDuration: 0.8, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.2)
-        let after = XCTAttachment(screenshot: app.screenshot()); after.lifetime = .keepAlways; add(after)
-        XCTAssertTrue(!first.exists || first.frame.minY < previous - 100, "previous: \(previous), current: \(first.frame.minY), thumb: \(target.frame), reader: \(reader.frame), start: \(start.screenPoint), end: \(end.screenPoint)")
+        XCTAssertGreaterThan(target.frame.midX, reader.frame.maxX - 16)
+        let tick = app.buttons["round-tick-2"]
+        XCTAssertTrue(tick.waitForExistence(timeout: 3))
+        XCTAssertLessThanOrEqual(tick.frame.maxX, reader.frame.minX + 48)
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.lifetime = .keepAlways; add(shot)
+        // UIKit owns the thumb's long-press enlargement and scrubbing; no app
+        // recognizer may intercept it. XCTest's idle wait outlasts its fade, so
+        // transient native gesture behavior needs device verification.
     }
 
-    func testNativeMenuRemainsReadableAfterScrolling() throws {
+    func testChromeAnimationDoesNotDisplaceReadingText() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--demo", "--demo-rounds"]
+        app.launch()
+        let reader = app.scrollViews["thread-OpenAI"]
+        XCTAssertTrue(reader.waitForExistence(timeout: 10))
+        let first = reader.staticTexts["继续讨论第1轮的问题"]
+        let before = first.frame.minY
+        let frame = reader.frame
+        let origin = app.coordinate(withNormalizedOffset: .zero)
+        let start = origin.withOffset(CGVector(dx: frame.minX + frame.width * 0.8, dy: frame.minY + frame.height * 0.6))
+        let end = origin.withOffset(CGVector(dx: frame.minX + frame.width * 0.8, dy: frame.minY + frame.height * 0.4))
+        let distance = start.screenPoint.y - end.screenPoint.y
+        start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.6)
+        let after = first.frame.minY
+        XCTAssertEqual(before - after, distance, accuracy: 20, "Hiding chrome must not add a layout jump to the finger's travel")
+        XCTAssertTrue(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in !app.buttons["model-tab-OpenAI"].isHittable }, object: app)], timeout: 5) == .completed)
+        end.press(forDuration: 0.05, thenDragTo: start, withVelocity: .slow, thenHoldForDuration: 0.6)
+        XCTAssertEqual(first.frame.minY, before, accuracy: 20, "Showing chrome must preserve the same reading position")
+        XCTAssertTrue(app.buttons["model-tab-OpenAI"].waitForExistence(timeout: 5))
+    }
+
+    func testDrawerCreatesSelectsAndSearchesConversations() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--demo", "--demo-rounds"]
+        app.launch()
+        let menu = app.buttons["workspace-menu"]
+        XCTAssertTrue(menu.waitForExistence(timeout: 10))
+        XCTAssertLessThan(menu.frame.midX, app.frame.width / 2)
+        menu.tap()
+        XCTAssertTrue(app.buttons["drawer-new-conversation"].waitForExistence(timeout: 5))
+        let oldRow = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "history-row-")).firstMatch
+        let oldID = oldRow.identifier
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.lifetime = .keepAlways; add(shot)
+        app.buttons["drawer-new-conversation"].tap()
+        XCTAssertTrue(app.buttons["drawer-new-conversation"].waitForNonExistence(timeout: 5))
+        XCTAssertTrue(app.textFields["prompt-field"].exists)
+        menu.tap()
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "history-row-")).count, 2)
+        app.buttons[oldID].tap()
+        XCTAssertTrue(app.staticTexts["继续讨论第1轮的问题"].firstMatch.waitForExistence(timeout: 5))
+        menu.tap()
+        let search = app.textFields["drawer-search"]
+        search.tap(); search.typeText("unlikely-conversation-123")
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "history-row-")).count, 0)
+        app.buttons["drawer-close"].tap()
+        XCTAssertTrue(menu.waitForExistence(timeout: 5))
+    }
+
+    func testDrawerRemainsReadableAfterScrolling() throws {
         try XCTSkipIf(UIDevice.current.userInterfaceIdiom == .pad, "Phone chrome")
         let app = XCUIApplication()
         app.launchArguments = ["--demo", "--demo-rounds"]
@@ -65,8 +112,8 @@ import UIKit
         reader.swipeDown()
         XCTAssertTrue(app.buttons["workspace-menu"].waitForExistence(timeout: 5))
         app.buttons["workspace-menu"].tap()
-        XCTAssertTrue(app.buttons["历史对话"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["历史对话"].isHittable)
+        XCTAssertTrue(app.buttons["drawer-new-conversation"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["drawer-settings"].isHittable)
         let screenshot = XCTAttachment(screenshot: app.screenshot())
         screenshot.lifetime = .keepAlways
         add(screenshot)
@@ -117,7 +164,7 @@ import UIKit
         XCTAssertTrue(openAI.waitForExistence(timeout: 10))
         claude.tap()
         XCTAssertTrue(claude.isSelected)
-        app.swipeRight()
+        app.scrollViews["thread-Claude"].swipeRight()
         XCTAssertTrue(openAI.isSelected)
         let prompt = app.textFields["prompt-field"]
         XCTAssertTrue(prompt.exists)
@@ -264,10 +311,7 @@ import UIKit
         let app = XCUIApplication()
         app.launchArguments = ["--demo", "--demo-rounds"]
         app.launch()
-        func readingTop(_ reader: XCUIElement) -> CGFloat {
-            let menu = app.buttons["workspace-menu"]
-            return max(reader.frame.minY, menu.exists ? menu.frame.maxY + 8 : reader.frame.minY)
-        }
+        func readingTop(_ reader: XCUIElement) -> CGFloat { reader.frame.minY }
         let first = app.scrollViews["thread-OpenAI"]
         XCTAssertTrue(first.waitForExistence(timeout: 10))
         first.swipeUp()
@@ -304,7 +348,6 @@ import UIKit
         app.launchArguments = ["--demo"]
         app.launch()
         app.buttons["workspace-menu"].tap()
-        app.buttons["历史对话"].tap()
         let row = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "history-row-")).firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 5))
         let originalLabel = row.label
@@ -353,7 +396,7 @@ import UIKit
         let height = scroll.frame.height
         XCTAssertLessThan(scroll.frame.minY, tab.frame.minY, "The reader must extend behind the glass bar")
         scroll.swipeUp()
-        XCTAssertTrue(tab.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in !tab.isHittable }, object: tab)], timeout: 5) == .completed)
         XCTAssertGreaterThanOrEqual(scroll.frame.height + 1, height)
         // Native paging may inset the frame at rounded screen corners. Reading must
         // extend into the status-bar band and reach the bottom edge.
@@ -378,8 +421,8 @@ import UIKit
         let originalHeight = scroll.frame.height
         XCTAssertLessThan(scroll.frame.minY, tab.frame.minY, "The reader must extend behind the glass bar")
         scroll.swipeUp()
-        XCTAssertTrue(tab.waitForNonExistence(timeout: 5))
-        XCTAssertFalse(app.textFields["prompt-field"].exists)
+        XCTAssertTrue(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in !tab.isHittable }, object: tab)], timeout: 5) == .completed)
+        XCTAssertFalse(app.textFields["prompt-field"].isHittable)
         XCTAssertGreaterThanOrEqual(scroll.frame.height + 1, originalHeight)
         // Native paging may inset the frame at rounded screen corners. Reading must
         // extend into the status-bar band and reach the bottom edge.
@@ -396,7 +439,7 @@ import UIKit
         let glassScreenshot = XCTAttachment(screenshot: app.screenshot()); glassScreenshot.lifetime = .keepAlways; add(glassScreenshot)
         XCTAssertGreaterThan(scroll.frame.maxY, app.textFields["prompt-field"].frame.maxY, "The reader must extend behind the input surroundings")
         scroll.swipeUp()
-        XCTAssertTrue(tab.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in !tab.isHittable }, object: tab)], timeout: 5) == .completed)
         scroll.swipeLeft()
         XCTAssertTrue(app.buttons["model-tab-Claude"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["model-tab-Claude"].isSelected)

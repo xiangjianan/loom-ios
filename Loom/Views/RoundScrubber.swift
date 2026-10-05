@@ -25,8 +25,8 @@ struct RoundScrubber: View {
                             .overlay {
                                 RoundedRectangle(cornerRadius: 1.5)
                                     .fill(round == (draggedRound ?? currentRound) ? Color.indigo : Color.secondary.opacity(0.6))
-                                    .frame(width: round == (draggedRound ?? currentRound) ? 24 : 16, height: 3)
-                                    .offset(x: 8)
+                                    .frame(width: round == (draggedRound ?? currentRound) ? 20 : 12, height: 3)
+                                    .offset(x: -9)
                                     .accessibilityHidden(true)
                             }
                             .frame(width: 44, height: step)
@@ -58,13 +58,13 @@ struct RoundScrubber: View {
                         onScrubbingChanged(false)
                     }
             )
-            .overlay(alignment: .leading) {
+            .overlay(alignment: .trailing) {
                 if let round = draggedRound {
                     Text("第 \(round) 轮")
                         .font(.caption.weight(.semibold))
                         .padding(.horizontal, 12).padding(.vertical, 8)
                         .glassEffect(.regular, in: .capsule)
-                        .fixedSize().offset(x: -80)
+                        .fixedSize().offset(x: 80)
                         .allowsHitTesting(false)
                 }
             }

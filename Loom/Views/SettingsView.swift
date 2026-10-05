@@ -41,20 +41,15 @@ struct SettingsView: View {
                         } label: { Label("添加模型", systemImage: "plus") }
                     }
                 } header: { Text("模型 · 最多 5 个") } footer: {
-                    Text("关闭模型后，不发送新消息并隐藏其对话页面；重新开启会恢复显示，历史记录不会删除。生成中暂不能切换。API Key 存在系统钥匙串，修改模型接口或型号后请新建对话。")
+                    Text("关闭模型会暂停发送并隐藏页面，历史保留。生成中暂不能切换。")
                 }.disabled(store.isWorking)
-                Section("连接") {
-                    Label("直接连接模型服务商", systemImage: "network")
-                    Text("API Key、对话上下文及引用直接发送至你配置的模型接口，不经过 Loom 后端。")
-                        .font(.footnote).foregroundStyle(.secondary)
-                }
                 Section {
                     Picker("句子快捷高亮", selection: $store.singleTapHighlight) {
                         Text("双击句子").tag(false)
                         Text("单击句子").tag(true)
                     }.pickerStyle(.menu).accessibilityIdentifier("sentence-highlight-mode").onChange(of: store.singleTapHighlight) { _, _ in store.save() }
                     Button("清除当前对话的所有高亮", role: .destructive) { clearConfirmation = true }
-                } header: { Text("阅读") } footer: { Text("默认单击一句即可高亮，再单击同一句取消；也可改为双击。长按使用系统选区菜单，拖动手柄可精确选择多行。移除引用标签也会取消对应高亮。") }
+                } header: { Text("阅读") } footer: { Text("重复操作取消高亮；长按可精确选择。") }
                 Section("数据") {
                     Button { showBackup = true } label: {
                         Label("备份与恢复", systemImage: "externaldrive")
@@ -62,10 +57,8 @@ struct SettingsView: View {
                 }
                 Section {
                     LabeledContent("版本", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "")
-                    Text("Loom 让多个模型的观点交织，帮助你继续思考。对话与高亮保存在本地，暂不与网页或其他设备同步。")
+                    Text("对话与高亮保存在本机。")
                         .font(.footnote).foregroundStyle(.secondary)
-                    Link("参与共建", destination: URL(string: "https://github.com/xiangjianan/loom-ios")!)
-                    Text("共享源码，欢迎贡献想法与代码。").font(.caption).foregroundStyle(.secondary)
                 } header: { Text("关于") }
             }
             .navigationTitle("设置").navigationBarTitleDisplayMode(.inline)
@@ -111,7 +104,7 @@ struct ModelEditor: View {
                 TextField("显示名称", text: $configuration.name).accessibilityIdentifier("model-name")
                 SecureField("API Key", text: $key).textInputAutocapitalization(.never).autocorrectionDisabled()
                     .accessibilityIdentifier("api-key")
-            } header: { Text("服务商") } footer: { Text("选择厂商后自动填入接口地址。输入 Key 后自动获取账号可用的模型。") }
+            } header: { Text("服务商") } footer: { Text("输入 Key 后获取可用型号。Key 保存在系统钥匙串。") }
             Section {
                 if !models.isEmpty {
                     Picker("在线型号", selection: $configuration.model) {
@@ -131,7 +124,7 @@ struct ModelEditor: View {
                     }
                 }.disabled(loading || !discoveryInput.valid)
                 if let error { Text(error).font(.footnote).foregroundStyle(.secondary) }
-            } header: { Text("模型") } footer: { Text("列表以账号权限为准。不支持列表接口时，可手动输入型号。") }
+            } header: { Text("模型") } footer: { Text("也可手动输入型号。") }
             Section {
                 TextField("API 接入地址", text: $configuration.endpoint)
                     .textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
@@ -139,7 +132,7 @@ struct ModelEditor: View {
                 Picker("接口协议", selection: $configuration.protocolKind) {
                     ForEach(ModelConfiguration.APIProtocol.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
-            } header: { Text("接口") } footer: { Text("预设地址可以修改。中国内地和国际站的 Key 及接口可能不同。") }
+            } header: { Text("接口") } footer: { Text("Key 需匹配接口地区。更换接口或型号后请新建对话。") }
             if store.configurations.contains(where: { $0.id == configuration.id }), store.configurations.count > 1 {
                 Section { Button("移除此模型", role: .destructive) { deleteConfirmation = true } }
             }

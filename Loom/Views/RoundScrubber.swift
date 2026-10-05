@@ -7,6 +7,7 @@ struct RoundScrubber: View {
     var onSelect: (Int, Bool) -> Void
     var onScrubbingChanged: (Bool) -> Void
     @State private var draggedRound: Int?
+    @State private var tapFeedback = 0
 
     var body: some View {
         GeometryReader { geometry in
@@ -15,6 +16,7 @@ struct RoundScrubber: View {
             VStack(spacing: 0) {
                 ForEach(rounds, id: \.self) { round in
                     Button {
+                        tapFeedback += 1
                         onSelect(round, false)
                     } label: {
                         Text("—")
@@ -62,6 +64,7 @@ struct RoundScrubber: View {
                         .allowsHitTesting(false)
                 }
             }
+            .sensoryFeedback(.selection, trigger: tapFeedback)
             .sensoryFeedback(.selection, trigger: draggedRound)
             .position(x: geometry.size.width / 2, y: geometry.size.height / 2)
         }

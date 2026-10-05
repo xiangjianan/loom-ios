@@ -43,7 +43,7 @@ struct ComposerView: View {
                 .accessibilityIdentifier("send-button")
             }
             .padding(6)
-            .glassEffect(.regular, in: .rect(cornerRadius: 28))
+            .glassEffect(.regular.tint(Color(uiColor: .systemBackground).opacity(0.04)), in: .rect(cornerRadius: 28))
         }
         .padding(.horizontal, 12).padding(.top, 6).padding(.bottom, 4)
         .frame(maxWidth: 1100).frame(maxWidth: .infinity)

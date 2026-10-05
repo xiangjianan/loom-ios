@@ -149,3 +149,16 @@ xcodebuild test -project Loom.xcodeproj -scheme Loom \
 
 ![浅色 Liquid Glass](docs/status-glass-1.4.1-light.png)
 ![深色 Liquid Glass](docs/status-glass-1.4.1-dark.png)
+
+
+## 1.5.0 阅读交互与玻璃栏
+
+- 点击轮次横杠、左右切换模型均提供轻触觉反馈；轮次拖动仍有逐轮反馈。
+- 模型标签和输入框使用系统原生 Liquid Glass，降低选中标签色调浓度，保持文字清晰。
+- 固定正文宽度，限制纵向阅读器与文本控件的横向偏移，模型切换和轮次跳转后保持居中。
+- 轮次横杠不参与正文宽度计算；新增横向位置检查覆盖模型往返和轮次点击。
+- 设置入口改为“参与共建”，说明为“共享源码，欢迎贡献想法与代码。”
+
+验证：26 项单元测试、7 项 iPhone 界面检查和 3 项 iPad 界面检查通过，覆盖正文居中、轮次跳转、阅读位置恢复、输入框、SVG 与选择自动滚动。真机签名构建通过。触觉反馈需在真机体验。
+
+![Liquid Glass 控件](docs/glass-controls-1.5.png)

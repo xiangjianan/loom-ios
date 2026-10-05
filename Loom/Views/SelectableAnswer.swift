@@ -16,6 +16,9 @@ struct SelectableAnswer: UIViewRepresentable {
         view.isSelectable = true
         view.isScrollEnabled = true
         view.bounces = false
+        view.alwaysBounceHorizontal = false
+        view.contentInsetAdjustmentBehavior = .never
+        view.textContainer.widthTracksTextView = true
         view.showsVerticalScrollIndicator = false
         view.backgroundColor = .clear
         view.textContainerInset = .zero
@@ -50,7 +53,7 @@ struct SelectableAnswer: UIViewRepresentable {
         context.coordinator.updating = false
     }
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: ReadingTextView, context: Context) -> CGSize? {
-        guard let width = proposal.width, width > 0 else { return nil }
+        guard let width = proposal.width, width.isFinite, width > 0 else { return nil }
         uiView.prepareSVGLayout(width: width)
         return CGSize(width: width, height: ceil(uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height))
     }
@@ -126,6 +129,16 @@ final class ReadingTextView: UITextView {
     }
     required init?(coder: NSCoder) { super.init(coder: coder) }
 
+    // This text view expands to its entire answer. Only the outer reader scrolls.
+    // UIKit may request a horizontal caret offset while a page is being relaid out.
+    override var contentOffset: CGPoint {
+        get { super.contentOffset }
+        set { super.contentOffset = CGPoint(x: 0, y: newValue.y) }
+    }
+    override func setContentOffset(_ contentOffset: CGPoint, animated: Bool) {
+        super.setContentOffset(CGPoint(x: 0, y: contentOffset.y), animated: animated)
+    }
+
     func prepareSVGLayout(width: CGFloat) {
         var changed = false
         attributedText.enumerateAttribute(.attachment, in: NSRange(location: 0, length: attributedText.length)) { value, _, _ in
@@ -168,5 +181,44 @@ final class ReadingTextView: UITextView {
         super.didMoveToWindow()
         if window == nil { selectionScroller?.stop() }
         else { selectionScroller?.attach() }
+    }
+}
+
+/// Keep the vertical reader from acquiring a horizontal offset during native
+/// selection, round jumps, or restoration inside the horizontal model pager.
+struct VerticalReaderScrollLock: UIViewRepresentable {
+    func makeUIView(context: Context) -> LockView { LockView() }
+    func updateUIView(_ uiView: LockView, context: Context) { uiView.connect() }
+    static func dismantleUIView(_ uiView: LockView, coordinator: ()) { uiView.observation?.invalidate() }
+
+    final class LockView: UIView {
+        var observation: NSKeyValueObservation?
+        weak var reader: UIScrollView?
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            if window == nil { observation?.invalidate(); observation = nil; reader = nil }
+            else { connect() }
+        }
+        func connect() {
+            guard window != nil else { return }
+            var ancestor = superview
+            while let view = ancestor {
+                if let scroll = view as? UIScrollView {
+                    guard reader !== scroll else { return }
+                    observation?.invalidate()
+                    reader = scroll
+                    scroll.alwaysBounceHorizontal = false
+                    scroll.isDirectionalLockEnabled = true
+                    observation = scroll.observe(\.contentOffset, options: [.initial, .new]) { [weak scroll] _, _ in
+                        MainActor.assumeIsolated {
+                            guard let scroll, abs(scroll.contentOffset.x) > 0.1 else { return }
+                            scroll.setContentOffset(CGPoint(x: 0, y: scroll.contentOffset.y), animated: false)
+                        }
+                    }
+                    return
+                }
+                ancestor = view.superview
+            }
+        }
     }
 }

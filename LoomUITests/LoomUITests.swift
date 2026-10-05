@@ -123,6 +123,10 @@ import UIKit
         let scroll = app.scrollViews["thread-OpenAI"]
         XCTAssertTrue(scroll.waitForExistence(timeout: 10))
         XCTAssertFalse(app.buttons["轮次导航"].exists)
+        let firstMessage = scroll.staticTexts["继续讨论第1轮的问题"]
+        let initialLayout = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in firstMessage.frame.minX >= scroll.frame.minX + 39 }, object: firstMessage)
+        XCTAssertEqual(XCTWaiter.wait(for: [initialLayout], timeout: 5), .completed)
+        let messageLeft = firstMessage.frame.minX
         scroll.swipeUp()
         let third = app.buttons["round-tick-3"]
         XCTAssertTrue(third.waitForExistence(timeout: 3))
@@ -132,6 +136,7 @@ import UIKit
         XCTAssertTrue(message.waitForExistence(timeout: 5))
         let arrived = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in message.isHittable }, object: message)
         XCTAssertEqual(XCTWaiter.wait(for: [arrived], timeout: 5), .completed)
+        XCTAssertEqual(message.frame.minX, messageLeft, accuracy: 2, "Round ticks must not shift the message horizontally")
         let disclosure = scroll.descendants(matching: .any)["message-references-3"]
         XCTAssertTrue(disclosure.waitForExistence(timeout: 3))
         disclosure.tap()
@@ -158,7 +163,9 @@ import UIKit
         XCTAssertTrue(first.waitForExistence(timeout: 10))
         first.swipeUp()
         let firstAnswer = first.textViews.matching(NSPredicate(format: "label == %@", "第1轮 · 第8段：这是一段可滚动的多轮回答。每个模型应该记住自己的阅读位置，轮次标记可以直接跳转。")).firstMatch
+        Thread.sleep(forTimeInterval: 0.6)
         let offsetA = first.frame.minY - firstAnswer.frame.minY
+        let leftA = firstAnswer.frame.minX
         first.swipeLeft()
         XCTAssertTrue(app.buttons["model-tab-Claude"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["model-tab-Claude"].isSelected)
@@ -166,17 +173,21 @@ import UIKit
         second.swipeUp()
         second.swipeUp()
         let secondAnswer = second.textViews.matching(NSPredicate(format: "label == %@", "第2轮 · 第3段：这是一段可滚动的多轮回答。每个模型应该记住自己的阅读位置，轮次标记可以直接跳转。")).firstMatch
+        Thread.sleep(forTimeInterval: 0.6)
         let offsetB = second.frame.minY - secondAnswer.frame.minY
+        let leftB = secondAnswer.frame.minX
         second.swipeRight()
         let restoredA = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-            abs((first.frame.minY - firstAnswer.frame.minY) - offsetA) < 25
+            abs((first.frame.minY - firstAnswer.frame.minY) - offsetA) < 25 && abs(firstAnswer.frame.minX - leftA) < 2
         }, object: first)
         XCTAssertEqual(XCTWaiter.wait(for: [restoredA], timeout: 5), .completed, "Expected \(offsetA), actual \(first.frame.minY - firstAnswer.frame.minY)")
+        XCTAssertEqual(firstAnswer.frame.minX, leftA, accuracy: 2, "Paging must preserve horizontal text alignment")
         first.swipeLeft()
         let restoredB = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-            abs((second.frame.minY - secondAnswer.frame.minY) - offsetB) < 25
+            abs((second.frame.minY - secondAnswer.frame.minY) - offsetB) < 25 && abs(secondAnswer.frame.minX - leftB) < 2
         }, object: second)
         XCTAssertEqual(XCTWaiter.wait(for: [restoredB], timeout: 5), .completed, "Expected \(offsetB), actual \(second.frame.minY - secondAnswer.frame.minY)")
+        XCTAssertEqual(secondAnswer.frame.minX, leftB, accuracy: 2, "Paging must preserve horizontal text alignment")
     }
 
     func testHistoryDeletionRequiresExplicitConfirmation() {

@@ -16,7 +16,7 @@ struct ThreadView: View {
     @State private var scrollTravel: CGFloat = 0
 
     var body: some View {
-        ScrollViewReader { _ in
+        GeometryReader { viewport in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 24) {
                     if thread.messages.isEmpty { emptyState }
@@ -33,13 +33,16 @@ struct ThreadView: View {
                 }
                 .scrollTargetLayout()
                 .padding(.horizontal, 24).padding(.top, 20).padding(.bottom, 24)
-                .frame(maxWidth: 760, alignment: .leading).frame(maxWidth: .infinity)
+                .frame(width: min(760, viewport.size.width), alignment: .leading)
+                .frame(width: viewport.size.width, alignment: .center)
+                .background(VerticalReaderScrollLock().allowsHitTesting(false).accessibilityHidden(true))
             }
             .scrollPosition($position)
             .scrollIndicators(.hidden)
             .task(id: isActive) {
                 guard isActive else { return }
                 let offset = savedOffset
+                guard offset > 0 else { return }
                 position.scrollTo(y: offset)
                 // Paging and the reading bars resize together; restore after they settle.
                 try? await Task.sleep(for: .milliseconds(360))

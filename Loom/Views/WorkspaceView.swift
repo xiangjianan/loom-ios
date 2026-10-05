@@ -71,6 +71,7 @@ struct WorkspaceView: View {
                 }
             }
             .onChange(of: store.selectedModel) { _, _ in setReadingChrome(true) }
+            .sensoryFeedback(.selection, trigger: store.selectedModel)
             .onChange(of: store.selectedConversation) { _, _ in setReadingChrome(true) }
             .toolbar(.hidden, for: .navigationBar)
             .sheet(item: $sheet) { destination in
@@ -127,7 +128,7 @@ struct WorkspaceView: View {
                                 }
                                 .padding(.horizontal, 17).frame(minHeight: 44)
                                 .foregroundStyle(selected ? .indigo : .primary)
-                                .glassEffect(.regular.tint(selected ? .indigo.opacity(0.15) : .clear).interactive(), in: .capsule)
+                                .glassEffect(.regular.tint(selected ? .indigo.opacity(0.08) : .clear).interactive(), in: .capsule)
                                 .glassEffectID(thread.id, in: tabsNamespace)
                             }
                             .buttonStyle(.plain)

@@ -55,10 +55,11 @@ struct SettingsView: View {
                     Button("清除当前对话的所有高亮", role: .destructive) { clearConfirmation = true }
                 } header: { Text("阅读") } footer: { Text("默认单击一句即可高亮，再点同一句取消；也可改为双击。长按使用系统选区菜单，拖动手柄可精确选择多行。移除引用标签也会取消对应高亮。") }
                 Section {
-                    LabeledContent("版本", value: "1.4.1")
+                    LabeledContent("版本", value: "1.5.0")
                     Text("Loom 让多个模型的观点交织，帮助你继续思考。对话与高亮保存在本地，暂不与网页或其他设备同步。")
                         .font(.footnote).foregroundStyle(.secondary)
-                    Link("项目源码", destination: URL(string: "https://github.com/xiangjianan/loom-ios")!)
+                    Link("参与共建", destination: URL(string: "https://github.com/xiangjianan/loom-ios")!)
+                    Text("共享源码，欢迎贡献想法与代码。").font(.caption).foregroundStyle(.secondary)
                 } header: { Text("关于") }
                 if let error { Section { Text(error).foregroundStyle(.red) } }
             }

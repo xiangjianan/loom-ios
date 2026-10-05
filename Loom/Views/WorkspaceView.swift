@@ -8,6 +8,8 @@ struct WorkspaceView: View {
     @FocusState private var composerFocused: Bool
     @State private var sheet: WorkspaceSheet?
     @State private var drawerVisible = false
+    @State private var drawerMounted = false
+    @State private var drawerAnimationGeneration = 0
     @State private var drawerProgress: CGFloat = 0
     @GestureState private var draggingDrawer = false
     @State private var pageSelection: UUID
@@ -33,7 +35,7 @@ struct WorkspaceView: View {
                 let progress = reveal / drawerWidth
                 ZStack(alignment: .leading) {
                     Color(uiColor: .systemGroupedBackground).ignoresSafeArea()
-                    if reveal > 0 {
+                    if drawerMounted || reveal > 0 {
                     ConversationDrawer(store: store, newConversation: {
                         closeDrawer()
                         if store.isWorking { showNewConfirmation = true } else { store.newConversation() }
@@ -45,7 +47,17 @@ struct WorkspaceView: View {
                 ZStack {
                     Color(uiColor: .systemGroupedBackground).ignoresSafeArea()
                     Group {
-                        if parallel { parallelBoard(width: geometry.size.width, readingInsets: readingInsets) }
+                        if store.visibleThreads.isEmpty {
+                            ContentUnavailableView {
+                                Label("没有启用的模型", systemImage: "switch.2")
+                            } description: {
+                                Text("在设置中开启模型，即可显示对话并发送消息。")
+                            } actions: {
+                                Button("启用模型") { sheet = .settings }
+                                    .accessibilityIdentifier("enable-models")
+                            }
+                        }
+                        else if parallel { parallelBoard(width: geometry.size.width, readingInsets: readingInsets) }
                         else { phoneBoard(readingInsets: readingInsets) }
                     }
                     .opacity(1 - 0.55 * progress)
@@ -113,7 +125,7 @@ struct WorkspaceView: View {
 
             }
             // Search keeps the drawer and the revealed page pinned behind the keyboard.
-            .ignoresSafeArea(.keyboard, edges: drawerVisible ? .bottom : [])
+            .ignoresSafeArea(.keyboard, edges: drawerMounted || drawerVisible ? .bottom : [])
             .onChange(of: draggingDrawer) { _, active in
                 if !active, drawerProgress != 0, drawerProgress != 1 { setDrawer(drawerVisible) }
             }
@@ -143,9 +155,14 @@ struct WorkspaceView: View {
     private func closeDrawer() { setDrawer(false) }
 
     private func setDrawer(_ visible: Bool) {
-        withAnimation(reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.86)) {
+        drawerAnimationGeneration += 1
+        let generation = drawerAnimationGeneration
+        if visible || drawerProgress > 0 { drawerMounted = true }
+        withAnimation(reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.86), completionCriteria: .removed) {
             drawerVisible = visible
             drawerProgress = visible ? 1 : 0
+        } completion: {
+            if generation == drawerAnimationGeneration, !drawerVisible, drawerProgress == 0 { drawerMounted = false }
         }
     }
 
@@ -181,7 +198,7 @@ struct WorkspaceView: View {
             ScrollView(.horizontal) {
                 GlassEffectContainer(spacing: 10) {
                     HStack(spacing: 10) {
-                        ForEach(store.current.threads) { thread in
+                        ForEach(store.visibleThreads) { thread in
                             let selected = store.selectedModel == thread.id
                             Button {
                                 withAnimation(reduceMotion ? nil : .snappy(duration: 0.25)) { store.selectedModel = thread.id }
@@ -215,7 +232,7 @@ struct WorkspaceView: View {
 
     private func phoneBoard(readingInsets: EdgeInsets) -> some View {
         TabView(selection: $pageSelection) {
-            ForEach(store.current.threads) { thread in
+            ForEach(store.visibleThreads) { thread in
                 ThreadView(thread: thread, store: store, readingInsets: readingInsets, savedOffset: readingOffset(for: thread.id), isActive: pageSelection == thread.id)
                     .tag(thread.id)
             }
@@ -227,13 +244,13 @@ struct WorkspaceView: View {
     }
 
     private func parallelBoard(width: CGFloat, readingInsets: EdgeInsets) -> some View {
-        let count = max(1, store.current.threads.count)
+        let count = max(1, store.visibleThreads.count)
         let columnWidth = max(310, (width - 48 - CGFloat(count - 1) * 16) / CGFloat(count))
         return ScrollViewReader { proxy in
         ScrollView(.horizontal) {
             GlassEffectContainer(spacing: 16) {
             HStack(alignment: .top, spacing: 16) {
-                ForEach(store.current.threads) { thread in
+                ForEach(store.visibleThreads) { thread in
                     ThreadView(thread: thread, store: store, readingInsets: readingInsets, savedOffset: readingOffset(for: thread.id), isActive: true)
                         .frame(width: columnWidth).id(thread.id)
                 }

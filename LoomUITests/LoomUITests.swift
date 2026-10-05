@@ -138,6 +138,38 @@ import UIKit
         XCTAssertEqual(search.value as? String, "观点")
     }
 
+    func testModelSwitchHidesPagesAndRestoresThem() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--demo"]
+        app.launch()
+        let menu = app.buttons["workspace-menu"]
+        XCTAssertTrue(menu.waitForExistence(timeout: 10))
+        menu.tap()
+        app.buttons["drawer-settings"].tap()
+        let first = app.switches["启用模型：OpenAI"]
+        XCTAssertTrue(first.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.switches["使用转发服务"].exists)
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.lifetime = .keepAlways; add(shot)
+        first.tap()
+        XCTAssertEqual(first.value as? String, "0")
+        app.buttons["完成"].tap()
+        app.buttons["drawer-backdrop"].tap()
+        XCTAssertTrue(app.buttons["model-tab-OpenAI"].waitForNonExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["model-tab-Claude"].isSelected)
+        menu.tap()
+        app.buttons["drawer-settings"].tap()
+        app.switches["启用模型：Claude"].tap()
+        app.buttons["完成"].tap()
+        app.buttons["drawer-backdrop"].tap()
+        XCTAssertTrue(app.buttons["enable-models"].waitForExistence(timeout: 5))
+        app.buttons["enable-models"].tap()
+        app.switches["启用模型：OpenAI"].tap()
+        app.buttons["完成"].tap()
+        XCTAssertTrue(app.buttons["model-tab-OpenAI"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["model-tab-OpenAI"].isSelected)
+        XCTAssertTrue(app.textViews.firstMatch.exists, "Re-enabling restores the stored answer")
+    }
+
     func testLeftSwipeOnDrawerClosesItWithoutSwitchingModels() {
         let app = XCUIApplication()
         app.launchArguments = ["--demo"]

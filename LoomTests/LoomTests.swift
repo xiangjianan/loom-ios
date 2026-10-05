@@ -3,6 +3,80 @@ import UIKit
 @testable import Loom
 
 @MainActor final class LoomTests: XCTestCase {
+    func testModelEnablementPersistsAndPreservesHistory() throws {
+        let file = temporaryFile()
+        defer { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }
+        let store = LoomStore(fileURL: file)
+        let first = store.configurations[0].id
+        let second = store.configurations[1].id
+        store.setModelEnabled(first, enabled: false)
+        XCTAssertEqual(store.visibleThreads.map(\.id), [second])
+        XCTAssertEqual(store.selectedModel, second)
+        XCTAssertFalse(LoomStore(fileURL: file).isModelEnabled(first))
+        store.setModelEnabled(second, enabled: false)
+        store.draft = "保留草稿"
+        store.send()
+        XCTAssertTrue(store.visibleThreads.isEmpty)
+        XCTAssertEqual(store.draft, "保留草稿")
+        XCTAssertEqual(store.current.round, 0)
+        let archive = try JSONDecoder().decode(LoomBackup.self, from: store.backup(includeKeys: false))
+        let restored = LoomStore(fileURL: temporaryFile())
+        try restored.restore(archive)
+        XCTAssertTrue(restored.visibleThreads.isEmpty)
+        XCTAssertEqual(restored.draft, "保留草稿")
+        let legacy = try JSONDecoder().decode(ModelConfiguration.self, from: Data(#"{"id":"00000000-0000-0000-0000-000000000001","name":"旧模型","endpoint":"https://provider.example/v1","model":"success","protocolKind":"openai"}"#.utf8))
+        XCTAssertTrue(legacy.isEnabled)
+        let demo = LoomStore(fileURL: temporaryFile(), demo: true)
+        let id = demo.current.threads[0].id
+        let history = demo.current.threads[0].messages
+        demo.setModelEnabled(id, enabled: false)
+        demo.setModelEnabled(id, enabled: true)
+        XCTAssertEqual(demo.current.threads[0].messages, history)
+    }
+
+    func testDisabledModelReceivesNoMessagesOrRequest() async throws {
+        let file = temporaryFile()
+        let store = LoomStore(fileURL: file, session: makeSession())
+        var configuration = store.configurations[0]
+        let disabledID = store.configurations[1].id
+        defer {
+            store.cancelAll()
+            try? KeychainStore().write("", for: configuration.id)
+            try? FileManager.default.removeItem(at: file.deletingLastPathComponent())
+        }
+        configuration.model = "success"
+        try store.saveConfiguration(configuration, key: "test-secret")
+        store.setModelEnabled(disabledID, enabled: false)
+        store.draft = "只发给已开启的模型"
+        store.send()
+        XCTAssertEqual(store.busyModels, [configuration.id])
+        XCTAssertTrue(store.current.threads.first { $0.id == disabledID }!.messages.isEmpty)
+        for _ in 0..<100 where store.isWorking { try await Task.sleep(for: .milliseconds(20)) }
+        XCTAssertEqual(store.current.threads.first { $0.id == configuration.id }?.messages.last?.content, "模拟回答")
+        XCTAssertTrue(store.current.threads.first { $0.id == disabledID }!.messages.isEmpty)
+        store.setModelEnabled(disabledID, enabled: true)
+        XCTAssertEqual(store.visibleThreads.count, 2)
+    }
+
+    func testLegacyRelaySettingsAreIgnoredForDirectRequests() async throws {
+        let file = temporaryFile()
+        let configuration = ModelConfiguration(name: "Direct", endpoint: "https://provider.example/v1", model: "success")
+        let conversation = Conversation(threads: [ModelThread(configuration: configuration)])
+        let state = SavedState(configurations: [configuration], conversations: [conversation], selectedConversation: conversation.id, relayURL: "https://relay.example", useRelay: true)
+        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try JSONEncoder().encode(state).write(to: file)
+        try KeychainStore().write("test-secret", for: configuration.id)
+        defer {
+            try? KeychainStore().write("", for: configuration.id)
+            try? FileManager.default.removeItem(at: file.deletingLastPathComponent())
+        }
+        let store = LoomStore(fileURL: file, session: makeSession())
+        let models = try await store.discoverModels(configuration: configuration, key: "test-secret")
+        XCTAssertEqual(models.map(\.id), ["failure", "success"])
+        store.save()
+        XCTAssertEqual(try JSONDecoder().decode(SavedState.self, from: Data(contentsOf: file)).useRelay, false)
+    }
+
     func testLeavingEmptyConversationRemovesItFromHistory() {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let store = LoomStore(fileURL: url, demo: true)
@@ -430,7 +504,6 @@ import UIKit
     func testParallelFailureIsolationAndRetry() async throws {
         let file = temporaryFile()
         let store = LoomStore(fileURL: file, session: makeSession())
-        store.useRelay = true
         let ids = store.configurations.map(\.id)
         defer {
             store.cancelAll()
@@ -441,8 +514,7 @@ import UIKit
             config.model = index == 0 ? "success" : "failure"
             try store.saveConfiguration(config, key: "test-secret")
         }
-        for viaRelay in [true, false] {
-            store.useRelay = viaRelay
+        do {
             store.newConversation()
             store.draft = "你好"
             store.send()
@@ -463,7 +535,6 @@ import UIKit
     func testCancelAndSwitchCannotWriteIntoNewConversation() async throws {
         let file = temporaryFile()
         let store = LoomStore(fileURL: file, session: makeSession())
-        store.useRelay = true
         let ids = store.configurations.map(\.id)
         defer {
             store.cancelAll()

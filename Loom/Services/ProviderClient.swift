@@ -1,6 +1,6 @@
 import Foundation
 
-/// Native clients do not need a web CORS relay. Use a relay only when explicitly selected.
+/// All model discovery and chat requests go directly to the configured provider.
 struct ProviderClient: Sendable {
     var session: URLSession = secureSession
     static let secureSession: URLSession = {

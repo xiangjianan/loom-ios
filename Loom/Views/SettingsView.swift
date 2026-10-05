@@ -4,8 +4,6 @@ struct SettingsView: View {
     @Bindable var store: LoomStore
     @Environment(\.dismiss) private var dismiss
     @State private var showBackup = false
-    @State private var relay = ""
-    @State private var error: String?
     @State private var clearConfirmation = false
 
     var body: some View {
@@ -13,19 +11,28 @@ struct SettingsView: View {
             Form {
                 Section {
                     ForEach(store.configurations) { configuration in
-                        NavigationLink {
-                            ModelEditor(store: store, configuration: configuration)
-                        } label: {
-                            HStack(spacing: 12) {
-                                Image(systemName: "sparkle").foregroundStyle(.blue)
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(configuration.name)
-                                    Text(configuration.model.isEmpty ? "尚未配置" : configuration.model)
-                                        .font(.caption).foregroundStyle(.secondary)
+                        HStack {
+                            NavigationLink {
+                                ModelEditor(store: store, configuration: configuration)
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "sparkle").foregroundStyle(.blue)
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(configuration.name)
+                                        Text(configuration.model.isEmpty ? "尚未配置" : configuration.model)
+                                            .font(.caption).foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    if !store.key(for: configuration.id).isEmpty { Image(systemName: "key.fill").font(.caption).foregroundStyle(.secondary) }
                                 }
-                                Spacer()
-                                if !store.key(for: configuration.id).isEmpty { Image(systemName: "key.fill").font(.caption).foregroundStyle(.secondary) }
                             }
+                            Toggle("启用模型：\(configuration.name)", isOn: Binding(
+                                get: { store.isModelEnabled(configuration.id) },
+                                set: { store.setModelEnabled(configuration.id, enabled: $0) }
+                            ))
+                            .labelsHidden()
+                            .accessibilityLabel("启用模型：\(configuration.name)")
+                            .accessibilityIdentifier("model-enabled-\(configuration.id)")
                         }
                     }
                     if store.configurations.count < 5 {
@@ -34,19 +41,12 @@ struct SettingsView: View {
                         } label: { Label("添加模型", systemImage: "plus") }
                     }
                 } header: { Text("模型 · 最多 5 个") } footer: {
-                    Text("API Key 仅存放在此设备的系统钥匙串。修改已有对话使用的模型后，新配置会在新对话中生效。")
+                    Text("关闭模型后，不发送新消息并隐藏其对话页面；重新开启会恢复显示，历史记录不会删除。生成中暂不能切换。API Key 存在系统钥匙串，修改模型接口或型号后请新建对话。")
                 }.disabled(store.isWorking)
-                Section {
-                    Toggle("使用转发服务", isOn: $store.useRelay)
-                        .disabled(store.isWorking).onChange(of: store.useRelay) { _, _ in store.save() }
-                    if store.useRelay {
-                    TextField("HTTPS 转发服务地址", text: $relay).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
-                    Button("保存服务地址") {
-                        do { try store.updateRelay(relay); error = nil } catch { self.error = error.localizedDescription }
-                    }.disabled(store.isWorking)
-                    }
-                } header: { Text("连接") } footer: {
-                    Text(store.useRelay ? "模型请求包含 API Key、对话上下文和引用，经转发服务发送给所选服务商。请使用可信任的转发服务。" : "默认直接连接模型服务商，不经过 Loom 后端。API Key、对话上下文和引用会发送给你配置的服务商。")
+                Section("连接") {
+                    Label("直接连接模型服务商", systemImage: "network")
+                    Text("API Key、对话上下文及引用直接发送至你配置的模型接口，不经过 Loom 后端。")
+                        .font(.footnote).foregroundStyle(.secondary)
                 }
                 Section {
                     Picker("句子快捷高亮", selection: $store.singleTapHighlight) {
@@ -61,18 +61,16 @@ struct SettingsView: View {
                     }.accessibilityIdentifier("settings-backup")
                 }
                 Section {
-                    LabeledContent("版本", value: "1.8.0")
+                    LabeledContent("版本", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "")
                     Text("Loom 让多个模型的观点交织，帮助你继续思考。对话与高亮保存在本地，暂不与网页或其他设备同步。")
                         .font(.footnote).foregroundStyle(.secondary)
                     Link("参与共建", destination: URL(string: "https://github.com/xiangjianan/loom-ios")!)
                     Text("共享源码，欢迎贡献想法与代码。").font(.caption).foregroundStyle(.secondary)
                 } header: { Text("关于") }
-                if let error { Section { Text(error).foregroundStyle(.red) } }
             }
             .navigationTitle("设置").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
             .sheet(isPresented: $showBackup) { BackupView(store: store) }
-            .onAppear { relay = store.relayURL }
             .confirmationDialog("清除所有高亮与待发送引用？", isPresented: $clearConfirmation, titleVisibility: .visible) {
                 Button("清除高亮", role: .destructive) { store.clearHighlights() }
             }
@@ -101,7 +99,7 @@ struct ModelEditor: View {
         ModelDiscoveryInput(endpoint: configuration.endpoint.trimmingCharacters(in: .whitespacesAndNewlines),
                             protocolKind: configuration.protocolKind.rawValue,
                             key: key.trimmingCharacters(in: .whitespacesAndNewlines),
-                            relay: store.useRelay ? store.relayURL : nil)
+                            relay: nil)
     }
     var body: some View {
         Form {

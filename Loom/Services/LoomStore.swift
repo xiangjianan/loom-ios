@@ -7,9 +7,7 @@ final class LoomStore {
     private(set) var conversations: [Conversation]
     var selectedConversation: UUID
     var selectedModel: UUID
-    var relayURL: String
     var singleTapHighlight: Bool
-    var useRelay: Bool
     var notice: String?
     private(set) var busyModels: Set<UUID> = []
     private(set) var pendingRoundStarts: [UUID: UUID] = [:]
@@ -24,6 +22,18 @@ final class LoomStore {
 
     var current: Conversation { conversations.first(where: { $0.id == selectedConversation }) ?? conversations[0] }
     var isWorking: Bool { !busyModels.isEmpty }
+    var visibleThreads: [ModelThread] { current.threads.filter { isModelEnabled($0.id) } }
+
+    func isModelEnabled(_ id: UUID) -> Bool {
+        configurations.first(where: { $0.id == id })?.isEnabled ?? true
+    }
+
+    func setModelEnabled(_ id: UUID, enabled: Bool) {
+        guard !isWorking, let index = configurations.firstIndex(where: { $0.id == id }) else { return }
+        configurations[index].enabled = enabled
+        ensureSelection()
+        save()
+    }
     var draft: String {
         get { current.draft }
         set { mutateCurrent { $0.draft = newValue }; save() }
@@ -48,9 +58,7 @@ final class LoomStore {
         }
         let configs = state?.configurations.isEmpty == false ? state!.configurations : ModelConfiguration.defaults
         configurations = configs
-        relayURL = state?.relayURL ?? RelayClient.defaultURL
         singleTapHighlight = state?.highlightGesture != "double"
-        useRelay = state?.useRelay ?? false
         let initial = Conversation(threads: configs.map { ModelThread(configuration: $0) })
         let loaded = state?.conversations.isEmpty == false ? state!.conversations : [initial]
         conversations = loaded
@@ -95,10 +103,10 @@ final class LoomStore {
             }
             if ProcessInfo.processInfo.arguments.contains("--demo-long") { mutateCurrent { $0.threads[0].messages[1].content = ReadingPreview.long } }
         }
+        ensureSelection()
     }
 
     func discoverModels(configuration: ModelConfiguration, key: String) async throws -> [AvailableModel] {
-        if useRelay { return try await RelayClient(baseURL: relayURL, session: session).models(configuration: configuration, key: key) }
         return try await ProviderClient(session: session).models(configuration: configuration, key: key)
     }
 
@@ -163,7 +171,7 @@ final class LoomStore {
         conversations.insert(conversation, at: 0)
         selectedConversation = conversation.id
         selectedModel = conversation.threads[0].id
-        save()
+        ensureSelection(); save()
     }
 
     func selectConversation(_ id: UUID) {
@@ -185,7 +193,9 @@ final class LoomStore {
     func send() {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, !isWorking else { return }
-        for thread in current.threads {
+        guard !visibleThreads.isEmpty else { notice = "请先启用至少一个模型。"; return }
+        let enabledIDs = Set(visibleThreads.map(\.id))
+        for thread in visibleThreads {
             if demo && ProcessInfo.processInfo.arguments.contains("--demo-next-round") { continue }
             guard !thread.configuration.model.isEmpty, !key(for: thread.id).isEmpty else {
                 notice = "请先在模型设置里配置 \(thread.configuration.name) 的型号和 API Key。"
@@ -199,11 +209,11 @@ final class LoomStore {
             if conversation.round == 1 { conversation.title = String(text.prefix(60)) }
             conversation.draft = ""
             conversation.quotes = []
-            for index in conversation.threads.indices {
+            for index in conversation.threads.indices where enabledIDs.contains(conversation.threads[index].id) {
                 conversation.threads[index].messages.append(ChatMessage(role: "user", content: content, display: text, references: references.isEmpty ? nil : references, round: conversation.round))
             }
         }
-        for thread in current.threads {
+        for thread in visibleThreads {
             pendingRoundStarts[thread.id] = thread.messages.last?.id
             startRequest(threadID: thread.id)
         }
@@ -211,7 +221,7 @@ final class LoomStore {
     }
 
     func retry(_ threadID: UUID) {
-        guard !isWorking, let thread = current.threads.first(where: { $0.id == threadID }),
+        guard !isWorking, isModelEnabled(threadID), let thread = current.threads.first(where: { $0.id == threadID }),
               thread.messages.last?.error == true else { return }
         guard !key(for: threadID).isEmpty else { notice = "请先配置 API Key。"; return }
         mutateCurrent { conversation in
@@ -223,7 +233,7 @@ final class LoomStore {
 
     private func startRequest(threadID: UUID) {
         let conversationID = selectedConversation
-        guard let thread = current.threads.first(where: { $0.id == threadID }) else { return }
+        guard isModelEnabled(threadID), let thread = current.threads.first(where: { $0.id == threadID }) else { return }
         let messages = thread.requestMessages
         let key = key(for: threadID)
         let placeholder = ChatMessage(role: "assistant", content: "", round: current.round, pending: true)
@@ -232,17 +242,14 @@ final class LoomStore {
             conversation.threads[index].messages.append(placeholder)
         }
         busyModels.insert(threadID)
-        let client = RelayClient(baseURL: relayURL, session: session)
         let direct = ProviderClient(session: session)
-        let viaRelay = useRelay
         requests[threadID] = Task { [weak self] in
             do {
                 let answer: String
                 if self?.demo == true && ProcessInfo.processInfo.arguments.contains("--demo-next-round") {
                     try await Task.sleep(for: .milliseconds(600))
                     answer = ReadingPreview.long
-                } else if viaRelay { answer = try await client.chat(configuration: thread.configuration, key: key, messages: messages) }
-                else { answer = try await direct.chat(configuration: thread.configuration, key: key, messages: messages) }
+                } else { answer = try await direct.chat(configuration: thread.configuration, key: key, messages: messages) }
                 try Task.checkCancellation()
                 self?.finish(conversationID, threadID: threadID, messageID: placeholder.id, text: answer, error: false)
             } catch {
@@ -348,15 +355,8 @@ final class LoomStore {
         }
         save()
     }
-    func updateRelay(_ value: String) throws {
-        guard let url = URL(string: value), url.scheme == "https", url.host != nil,
-              url.user == nil, url.password == nil, url.query == nil, url.fragment == nil else {
-            throw RelayClient.ClientError(message: "请输入有效的 HTTPS 转发服务地址。")
-        }
-        relayURL = value.trimmingCharacters(in: .whitespacesAndNewlines); save()
-    }
     private func ensureSelection() {
-        if !current.threads.contains(where: { $0.id == selectedModel }), let first = current.threads.first { selectedModel = first.id }
+        if !visibleThreads.contains(where: { $0.id == selectedModel }), let first = visibleThreads.first { selectedModel = first.id }
     }
     private func mutateCurrent(_ body: (inout Conversation) -> Void) {
         guard let index = conversations.firstIndex(where: { $0.id == selectedConversation }) else { return }
@@ -364,7 +364,7 @@ final class LoomStore {
     }
     private var savedState: SavedState {
         SavedState(configurations: configurations, conversations: conversations, selectedConversation: selectedConversation,
-                   relayURL: relayURL, useRelay: useRelay, singleTapHighlight: singleTapHighlight,
+                   relayURL: "", useRelay: false, singleTapHighlight: singleTapHighlight,
                    highlightGesture: singleTapHighlight ? "single" : "double")
     }
 
@@ -426,8 +426,7 @@ final class LoomStore {
         conversations = state.conversations
         selectedConversation = conversations.first(where: { $0.id == state.selectedConversation })?.id ?? conversations[0].id
         selectedModel = current.threads[0].id
-        relayURL = state.relayURL
-        useRelay = state.useRelay ?? false
+        ensureSelection()
         singleTapHighlight = state.highlightGesture != "double"
         canSave = true
         notice = nil
@@ -438,7 +437,7 @@ final class LoomStore {
         do {
             try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
             let data = try JSONEncoder().encode(SavedState(configurations: configurations, conversations: conversations,
-                                                          selectedConversation: selectedConversation, relayURL: relayURL, useRelay: useRelay, singleTapHighlight: singleTapHighlight, highlightGesture: singleTapHighlight ? "single" : "double"))
+                                                          selectedConversation: selectedConversation, relayURL: "", useRelay: false, singleTapHighlight: singleTapHighlight, highlightGesture: singleTapHighlight ? "single" : "double"))
             try data.write(to: fileURL, options: [.atomic, .completeFileProtection])
         } catch { notice = "本地保存失败：\(error.localizedDescription)" }
     }

@@ -6,6 +6,8 @@ struct ModelConfiguration: Codable, Identifiable, Equatable, Sendable {
     var endpoint: String
     var model: String
     var protocolKind: APIProtocol = .openAI
+    var enabled: Bool? = nil
+    var isEnabled: Bool { enabled ?? true }
 
     enum APIProtocol: String, Codable, CaseIterable, Sendable {
         case openAI = "openai"
@@ -68,6 +70,7 @@ struct SavedState: Codable {
     var configurations: [ModelConfiguration]
     var conversations: [Conversation]
     var selectedConversation: UUID?
+    // Legacy fields remain decodable for older local files and backups.
     var relayURL: String
     var useRelay: Bool? = nil
     var singleTapHighlight: Bool? = nil

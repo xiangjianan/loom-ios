@@ -2,6 +2,93 @@ import XCTest
 import UIKit
 
 @MainActor final class LoomUITests: XCTestCase {
+    func testNewRoundReturnsToUserMessageInsteadOfAnswerBottom() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--demo", "--demo-rounds", "--demo-next-round"]
+        app.launch()
+        let prompt = app.textFields["prompt-field"]
+        XCTAssertTrue(prompt.waitForExistence(timeout: 10))
+        prompt.tap()
+        prompt.typeText("新一轮定位测试")
+        app.buttons["send-button"].tap()
+        let user = app.staticTexts["新一轮定位测试"].firstMatch
+        XCTAssertTrue(user.waitForExistence(timeout: 8))
+        XCTAssertTrue(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            user.isHittable && user.frame.minY < app.frame.height * 0.4
+        }, object: user)], timeout: 8) == .completed)
+        sleep(1)
+        XCTAssertLessThan(user.frame.minY, app.frame.height * 0.4)
+        app.buttons["model-tab-Claude"].tap()
+        XCTAssertTrue(app.buttons["model-tab-Claude"].isSelected)
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        let second = app.scrollViews["thread-Claude"].staticTexts["新一轮定位测试"]
+        XCTAssertTrue(second.waitForExistence(timeout: 5))
+        XCTAssertTrue(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            second.isHittable && second.frame.minY < app.frame.height * 0.4
+        }, object: second)], timeout: 5) == .completed)
+    }
+
+    func testNativeScrollIndicatorRemainsDraggableBesideRoundTicks() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--demo", "--demo-rounds"]
+        app.launch()
+        let reader = app.scrollViews["thread-OpenAI"]
+        XCTAssertTrue(reader.waitForExistence(timeout: 10))
+        reader.swipeUp()
+        let indicator = reader.otherElements.matching(NSPredicate(format: "label BEGINSWITH %@", "Vertical scroll bar")).firstMatch
+        XCTAssertTrue(indicator.waitForExistence(timeout: 3))
+        let thumb = indicator.children(matching: .other).firstMatch
+        let target = thumb.exists ? thumb : indicator
+        let first = reader.staticTexts["继续讨论第1轮的问题"]
+        let previous = first.frame.minY
+        let before = XCTAttachment(screenshot: app.screenshot()); before.lifetime = .keepAlways; add(before)
+        // The system paints a 3 pt thumb; use its expanded finger hit region.
+        let origin = app.coordinate(withNormalizedOffset: .zero)
+        let start = origin.withOffset(CGVector(dx: target.frame.midX - 6, dy: target.frame.midY))
+        let end = origin.withOffset(CGVector(dx: target.frame.midX - 6, dy: reader.frame.minY + reader.frame.height * 0.8))
+        start.press(forDuration: 0.8, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.2)
+        let after = XCTAttachment(screenshot: app.screenshot()); after.lifetime = .keepAlways; add(after)
+        XCTAssertTrue(!first.exists || first.frame.minY < previous - 100, "previous: \(previous), current: \(first.frame.minY), thumb: \(target.frame), reader: \(reader.frame), start: \(start.screenPoint), end: \(end.screenPoint)")
+    }
+
+    func testNativeMenuRemainsReadableAfterScrolling() throws {
+        try XCTSkipIf(UIDevice.current.userInterfaceIdiom == .pad, "Phone chrome")
+        let app = XCUIApplication()
+        app.launchArguments = ["--demo", "--demo-rounds"]
+        app.launch()
+        let reader = app.scrollViews["thread-OpenAI"]
+        XCTAssertTrue(reader.waitForExistence(timeout: 10))
+        reader.swipeUp()
+        reader.swipeUp()
+        reader.swipeDown()
+        XCTAssertTrue(app.buttons["workspace-menu"].waitForExistence(timeout: 5))
+        app.buttons["workspace-menu"].tap()
+        XCTAssertTrue(app.buttons["历史对话"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["历史对话"].isHittable)
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+    }
+
+    func testBackupMenuUsesNativeFilesExport() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--demo", "--demo-rounds"]
+        app.launch()
+        XCTAssertTrue(app.buttons["workspace-menu"].waitForExistence(timeout: 10))
+        app.buttons["workspace-menu"].tap()
+        app.buttons["备份（导入 / 导出）"].tap()
+        XCTAssertTrue(app.navigationBars["备份"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["backup-export"].exists)
+        XCTAssertTrue(app.buttons["backup-import"].exists)
+        app.buttons["backup-export"].tap()
+        XCTAssertTrue(app.buttons["DOCPicker.actionButton"].waitForExistence(timeout: 5))
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.lifetime = .keepAlways
+        add(shot)
+    }
+
     func testPhoneTabsSwipeComposerAndSettings() throws {
         try XCTSkipIf(UIDevice.current.userInterfaceIdiom == .pad, "iPad uses parallel columns")
         let app = XCUIApplication()
@@ -205,7 +292,7 @@ import UIKit
         let originalLabel = row.label
         let start = row.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5))
         let end = row.coordinate(withNormalizedOffset: CGVector(dx: 0.02, dy: 0.5))
-        start.press(forDuration: 0.05, thenDragTo: end)
+        start.press(forDuration: 0.8, thenDragTo: end)
         let alert = app.alerts.firstMatch
         XCTAssertTrue(alert.waitForExistence(timeout: 5))
         XCTAssertTrue(alert.buttons["取消"].exists)
@@ -213,7 +300,7 @@ import UIKit
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.lifetime = .keepAlways; add(screenshot)
         alert.buttons["取消"].tap()
         XCTAssertEqual(row.label, originalLabel)
-        start.press(forDuration: 0.05, thenDragTo: end)
+        start.press(forDuration: 0.8, thenDragTo: end)
         XCTAssertTrue(alert.waitForExistence(timeout: 5))
         alert.buttons["删除"].tap()
         XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label == %@", originalLabel)).firstMatch.exists)

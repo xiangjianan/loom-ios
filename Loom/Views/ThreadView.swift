@@ -6,15 +6,19 @@ struct ThreadView: View {
     var readingInsets: EdgeInsets = EdgeInsets()
     @Binding var savedOffset: CGFloat
     var isActive: Bool
+    private let contentTopPadding: CGFloat = 20
     @State private var position = ScrollPosition(idType: UUID.self)
     @State private var currentRound = 1
+    @State private var roundPositionTask: Task<Void, Never>?
     @State private var railVisible = false
+    @State private var indicatorFlash = 0
     @State private var scrubbing = false
     @State private var railHideTask: Task<Void, Never>?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var onReadingScroll: (Bool) -> Void = { _ in }
     @State private var scrollPhase: ScrollPhase = .idle
     @State private var scrollTravel: CGFloat = 0
+    @State private var liveTopInset: CGFloat = 0
 
     var body: some View {
         GeometryReader { viewport in
@@ -33,28 +37,44 @@ struct ThreadView: View {
                     Color.clear.frame(height: 1).id("end")
                 }
                 .scrollTargetLayout()
-                .padding(.horizontal, 24).padding(.top, 20).padding(.bottom, 24)
+                .padding(.horizontal, 24).padding(.top, contentTopPadding).padding(.bottom, 24)
                 .frame(width: min(760, viewport.size.width), alignment: .leading)
                 .frame(width: viewport.size.width, alignment: .center)
-                .background(VerticalReaderScrollLock().allowsHitTesting(false).accessibilityHidden(true))
+                .background(VerticalReaderScrollLock { active in
+                    scrubbing = active
+                    if active { roundPositionTask?.cancel(); revealRail() } else { scheduleRailHide() }
+                }.allowsHitTesting(false).accessibilityHidden(true))
             }
             .contentMargins(.top, readingInsets.top, for: .scrollContent)
             .contentMargins(.bottom, readingInsets.bottom, for: .scrollContent)
             .scrollPosition($position)
-            .scrollIndicators(.hidden)
+            .scrollIndicators(.visible, axes: .vertical)
+            .scrollIndicatorsFlash(trigger: indicatorFlash)
+            .task(id: railVisible) {
+                guard railVisible else { return }
+                // Keep the native thumb available for the same interval as the round rail.
+                while !Task.isCancelled {
+                    if scrollPhase == .idle, !scrubbing { indicatorFlash += 1 }
+                    try? await Task.sleep(for: .milliseconds(650))
+                }
+            }
+            .onChange(of: readingInsets.top, initial: true) { _, inset in liveTopInset = inset }
             .task(id: isActive) {
                 guard isActive else { return }
+                if let id = store.takeRoundStart(for: thread.id) { revealRoundStart(id); return }
                 let offset = savedOffset
                 guard offset > 0 else { return }
-                position.scrollTo(y: offset)
+                // ScrollPosition addresses content coordinates, excluding the reading inset and stack padding.
+                position.scrollTo(y: offset - liveTopInset - contentTopPadding)
                 // Paging and the reading bars resize together; restore after they settle.
                 try? await Task.sleep(for: .milliseconds(360))
                 guard !Task.isCancelled, scrollPhase == .idle else { return }
-                position.scrollTo(y: offset)
+                position.scrollTo(y: offset - liveTopInset - contentTopPadding)
             }
             .onScrollPhaseChange { _, phase in
                 scrollPhase = phase
                 if phase == .interacting {
+                    roundPositionTask?.cancel()
                     scrollTravel = 0
                     revealRail()
                 }
@@ -89,7 +109,7 @@ struct ThreadView: View {
                                 if round == rounds.first { position.scrollTo(edge: .top) }
                                 else { position.scrollTo(id: message.id, anchor: UnitPoint(x: 0.5, y: 0.12)) }
                             }
-                            if dragging || reduceMotion { jump() }
+                            if reduceMotion { jump() }
                             else { withAnimation(.smooth(duration: 0.25), jump) }
                         }
                         revealRail()
@@ -98,17 +118,35 @@ struct ThreadView: View {
                         scrubbing = active
                         if active { revealRail() } else { scheduleRailHide() }
                     }
-                    .padding(.trailing, 2)
+                    .padding(.trailing, 18)
                     .transition(.opacity)
                 }
             }
-            .onChange(of: thread.messages.count) { old, new in
-                if new > old, isActive { position.scrollTo(edge: .bottom) }
+            .onChange(of: store.pendingRoundStarts[thread.id]) { _, id in
+                if id != nil, isActive, let target = store.takeRoundStart(for: thread.id) {
+                    revealRoundStart(target)
+                }
             }
-            .onDisappear { railHideTask?.cancel() }
+            .onDisappear { railHideTask?.cancel(); roundPositionTask?.cancel() }
 
         }
     }
+    private func revealRoundStart(_ messageID: UUID) {
+        if let message = thread.messages.first(where: { $0.id == messageID }) { currentRound = message.round }
+        withAnimation(reduceMotion ? nil : .smooth(duration: 0.3)) {
+            position.scrollTo(id: messageID, anchor: .top)
+        }
+        roundPositionTask?.cancel()
+        roundPositionTask = Task { @MainActor in
+            // A newly activated pager and a long answer both need a layout pass.
+            try? await Task.sleep(for: .milliseconds(400))
+            guard !Task.isCancelled, scrollPhase != .interacting else { return }
+            withAnimation(reduceMotion ? nil : .smooth(duration: 0.25)) {
+                position.scrollTo(id: messageID, anchor: .top)
+            }
+        }
+    }
+
     private func revealRail() {
         railHideTask?.cancel()
         withAnimation(.easeOut(duration: 0.15)) { railVisible = true }

@@ -12,6 +12,9 @@ final class LoomStore {
     var useRelay: Bool
     var notice: String?
     private(set) var busyModels: Set<UUID> = []
+    private(set) var pendingRoundStarts: [UUID: UUID] = [:]
+
+    func takeRoundStart(for threadID: UUID) -> UUID? { pendingRoundStarts.removeValue(forKey: threadID) }
     @ObservationIgnored private var requests: [UUID: Task<Void, Never>] = [:]
     @ObservationIgnored private let fileURL: URL
     @ObservationIgnored private let session: URLSession
@@ -154,6 +157,7 @@ final class LoomStore {
 
     func newConversation() {
         cancelAll()
+        pendingRoundStarts.removeAll()
         let conversation = Conversation(threads: configurations.map { ModelThread(configuration: $0) })
         conversations.insert(conversation, at: 0)
         selectedConversation = conversation.id
@@ -163,11 +167,11 @@ final class LoomStore {
 
     func selectConversation(_ id: UUID) {
         guard conversations.contains(where: { $0.id == id }) else { return }
-        cancelAll(); selectedConversation = id; ensureSelection(); save()
+        cancelAll(); pendingRoundStarts.removeAll(); selectedConversation = id; ensureSelection(); save()
     }
 
     func deleteConversation(_ id: UUID) {
-        if selectedConversation == id { cancelAll() }
+        if selectedConversation == id { cancelAll(); pendingRoundStarts.removeAll() }
         conversations.removeAll { $0.id == id }
         if conversations.isEmpty { newConversation() }
         else if selectedConversation == id { selectedConversation = conversations[0].id; ensureSelection() }
@@ -178,6 +182,7 @@ final class LoomStore {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, !isWorking else { return }
         for thread in current.threads {
+            if demo && ProcessInfo.processInfo.arguments.contains("--demo-next-round") { continue }
             guard !thread.configuration.model.isEmpty, !key(for: thread.id).isEmpty else {
                 notice = "请先在模型设置里配置 \(thread.configuration.name) 的型号和 API Key。"
                 return
@@ -194,7 +199,10 @@ final class LoomStore {
                 conversation.threads[index].messages.append(ChatMessage(role: "user", content: content, display: text, references: references.isEmpty ? nil : references, round: conversation.round))
             }
         }
-        for thread in current.threads { startRequest(threadID: thread.id) }
+        for thread in current.threads {
+            pendingRoundStarts[thread.id] = thread.messages.last?.id
+            startRequest(threadID: thread.id)
+        }
         save()
     }
 
@@ -226,7 +234,10 @@ final class LoomStore {
         requests[threadID] = Task { [weak self] in
             do {
                 let answer: String
-                if viaRelay { answer = try await client.chat(configuration: thread.configuration, key: key, messages: messages) }
+                if self?.demo == true && ProcessInfo.processInfo.arguments.contains("--demo-next-round") {
+                    try await Task.sleep(for: .milliseconds(600))
+                    answer = ReadingPreview.long
+                } else if viaRelay { answer = try await client.chat(configuration: thread.configuration, key: key, messages: messages) }
                 else { answer = try await direct.chat(configuration: thread.configuration, key: key, messages: messages) }
                 try Task.checkCancellation()
                 self?.finish(conversationID, threadID: threadID, messageID: placeholder.id, text: answer, error: false)
@@ -245,6 +256,8 @@ final class LoomStore {
         conversations[c].threads[t].messages[m].content = text
         conversations[c].threads[t].messages[m].pending = false
         conversations[c].threads[t].messages[m].error = error
+        let round = conversations[c].threads[t].messages[m].round
+        pendingRoundStarts[threadID] = conversations[c].threads[t].messages.first(where: { $0.round == round && $0.role == "user" })?.id
         conversations[c].updated = Date()
         busyModels.remove(threadID); requests[threadID] = nil; save()
     }
@@ -345,6 +358,77 @@ final class LoomStore {
         guard let index = conversations.firstIndex(where: { $0.id == selectedConversation }) else { return }
         body(&conversations[index]); conversations[index].updated = Date()
     }
+    private var savedState: SavedState {
+        SavedState(configurations: configurations, conversations: conversations, selectedConversation: selectedConversation,
+                   relayURL: relayURL, useRelay: useRelay, singleTapHighlight: singleTapHighlight,
+                   highlightGesture: singleTapHighlight ? "single" : "double")
+    }
+
+    func backup(includeKeys: Bool) throws -> Data {
+        let configs = configurations + conversations.flatMap { $0.threads.map(\.configuration) }
+        var keys: [String: String] = [:]
+        if includeKeys {
+            for config in configs {
+                let key = keychain.read(config.id)
+                if !key.isEmpty { keys[config.id.uuidString] = key }
+            }
+        }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return try encoder.encode(LoomBackup(state: savedState, keys: includeKeys ? keys : nil))
+    }
+
+    func restore(_ archive: LoomBackup) throws {
+        try archive.validate()
+        var state = archive.state
+        for c in state.conversations.indices {
+            for t in state.conversations[c].threads.indices {
+                for m in state.conversations[c].threads[t].messages.indices {
+                    state.conversations[c].threads[t].messages[m].recoverSentReferences()
+                    if state.conversations[c].threads[t].messages[m].pending {
+                        state.conversations[c].threads[t].messages[m].pending = false
+                        state.conversations[c].threads[t].messages[m].error = true
+                        state.conversations[c].threads[t].messages[m].content = "备份中的请求尚未完成，可以重试。"
+                    }
+                }
+            }
+        }
+        let data = try JSONEncoder().encode(state)
+        let folder = fileURL.deletingLastPathComponent()
+        if !demo {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            // Preserve the exact previous file, including an unreadable local state.
+            if FileManager.default.fileExists(atPath: fileURL.path) {
+                let previous = try Data(contentsOf: fileURL)
+                try previous.write(to: folder.appending(path: "before-import-\(UUID().uuidString).json"), options: [.atomic, .completeFileProtection])
+            }
+        }
+        var previousKeys: [UUID: String] = [:]
+        do {
+            for (rawID, value) in archive.keys ?? [:] {
+                guard let id = UUID(uuidString: rawID) else { continue }
+                previousKeys[id] = keychain.read(id)
+                try keychain.write(value, for: id)
+            }
+            if !demo { try data.write(to: fileURL, options: [.atomic, .completeFileProtection]) }
+        } catch {
+            for (id, key) in previousKeys { try? keychain.write(key, for: id) }
+            throw error
+        }
+        // Do not save the outgoing state over the successfully imported file.
+        for task in requests.values { task.cancel() }
+        requests.removeAll(); busyModels.removeAll(); pendingRoundStarts.removeAll()
+        configurations = state.configurations
+        conversations = state.conversations
+        selectedConversation = conversations.first(where: { $0.id == state.selectedConversation })?.id ?? conversations[0].id
+        selectedModel = current.threads[0].id
+        relayURL = state.relayURL
+        useRelay = state.useRelay ?? false
+        singleTapHighlight = state.highlightGesture != "double"
+        canSave = true
+        notice = nil
+    }
+
     func save() {
         guard !demo, canSave else { return }
         do {

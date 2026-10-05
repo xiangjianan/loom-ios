@@ -1,6 +1,6 @@
 import SwiftUI
 
-private enum WorkspaceSheet: String, Identifiable { case settings, history; var id: String { rawValue } }
+private enum WorkspaceSheet: String, Identifiable { case settings, history, backup; var id: String { rawValue } }
 
 struct WorkspaceView: View {
     @Bindable var store: LoomStore
@@ -49,18 +49,11 @@ struct WorkspaceView: View {
                     if readingChromeVisible {
                         HStack(spacing: 8) {
                             modelTabs
-                            Menu {
-                                Button("新对话", systemImage: "square.and.pencil") {
-                                    if store.isWorking { showNewConfirmation = true } else { store.newConversation() }
-                                }
-                                Button("历史对话", systemImage: "clock") { sheet = .history }
-                                Button("模型设置", systemImage: "slider.horizontal.3") { sheet = .settings }
-                            } label: {
-                                Image(systemName: "ellipsis").font(.headline).frame(width: 44, height: 44)
-                                    .glassEffect(.regular.interactive(), in: .circle)
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel("更多操作").accessibilityIdentifier("workspace-menu")
+                            WorkspaceMenu(newConversation: {
+                                if store.isWorking { showNewConfirmation = true } else { store.newConversation() }
+                            }, history: { sheet = .history }, settings: { sheet = .settings }, backup: { sheet = .backup })
+                            .frame(width: 44, height: 44)
+                            .glassEffect(.regular.interactive(), in: .circle)
                             .padding(.trailing, 12)
                         }.padding(.vertical, 4)
                         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { topBarHeight = $0 }
@@ -85,6 +78,7 @@ struct WorkspaceView: View {
                 switch destination {
                 case .settings: SettingsView(store: store)
                 case .history: HistoryView(store: store)
+                case .backup: BackupView(store: store)
                 }
             }
             .confirmationDialog("停止当前生成并开启新对话？", isPresented: $showNewConfirmation, titleVisibility: .visible) {

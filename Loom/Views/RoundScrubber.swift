@@ -21,7 +21,13 @@ struct RoundScrubber: View {
                     } label: {
                         Text("—")
                             .font(.system(size: round == (draggedRound ?? currentRound) ? 24 : 16, weight: .bold))
-                            .foregroundStyle(round == (draggedRound ?? currentRound) ? Color.indigo : Color.secondary.opacity(0.6))
+                            .foregroundStyle(.clear)
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 1.5)
+                                    .fill(round == (draggedRound ?? currentRound) ? Color.indigo : Color.secondary.opacity(0.6))
+                                    .frame(width: round == (draggedRound ?? currentRound) ? 24 : 16, height: 3)
+                                    .accessibilityHidden(true)
+                            }
                             .frame(width: 44, height: step)
                             .contentShape(.rect)
                             .accessibilityLabel("跳到第 \(round) 轮")

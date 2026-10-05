@@ -69,8 +69,7 @@ struct WorkspaceView: View {
                         .padding(.leading, 12)
                         modelTabs
                     }
-                    .padding(.vertical, 4)
-                    .padding(.bottom, 10)
+                    .padding(.bottom, 2)
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { topBarHeight = $0 }
                     .background { TopBarGlass(safeAreaHeight: geometry.safeAreaInsets.top) }
                     .allowsHitTesting(!drawerVisible)
@@ -197,7 +196,7 @@ struct WorkspaceView: View {
                             .id(thread.id)
                         }
                     }.padding(.leading, 12).padding(.trailing, 4)
-                }.padding(.vertical, 4)
+                }.padding(.vertical, 2)
             }
             .scrollIndicators(.hidden)
             .onChange(of: store.selectedModel) { _, id in
@@ -311,6 +310,8 @@ private struct TopBarGlass: View {
                 .fill(.clear)
                 .frame(height: geometry.size.height + safeAreaHeight)
                 .glassEffect(.regular, in: .rect(cornerRadius: 0))
+                .opacity(0.82)
+                .clipped()
                 .offset(y: -safeAreaHeight)
         }
         .allowsHitTesting(false)

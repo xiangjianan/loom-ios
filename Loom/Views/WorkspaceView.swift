@@ -196,31 +196,10 @@ struct WorkspaceView: View {
     private var modelTabs: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal) {
-                GlassEffectContainer(spacing: 10) {
-                    HStack(spacing: 10) {
-                        ForEach(store.visibleThreads) { thread in
-                            let selected = store.selectedModel == thread.id
-                            Button {
-                                withAnimation(reduceMotion ? nil : .snappy(duration: 0.25)) { store.selectedModel = thread.id }
-                            } label: {
-                                HStack(spacing: 7) {
-                                    Circle().fill(selected ? Color.blue : Color.secondary.opacity(0.4)).frame(width: 6, height: 6)
-                                    Text(thread.configuration.name).font(.subheadline.weight(selected ? .semibold : .medium))
-                                    if store.busyModels.contains(thread.id) { ProgressView().controlSize(.mini) }
-                                }
-                                .padding(.horizontal, 17).frame(minHeight: 44)
-                                .foregroundStyle(selected ? .blue : .primary)
-                                .glassEffect(.regular.tint(selected ? .blue.opacity(0.08) : .clear).interactive(), in: .capsule)
-                                .glassEffectID(thread.id, in: tabsNamespace)
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityAddTraits(selected ? .isSelected : [])
-                            .accessibilityLabel("\(thread.configuration.name)，\(selected ? "已选择" : "切换模型")")
-                            .accessibilityIdentifier("model-tab-\(thread.configuration.name)")
-                            .accessibilityHidden(drawerVisible)
-                            .id(thread.id)
-                        }
-                    }.padding(.leading, 12).padding(.trailing, 4)
+                if UIDevice.current.userInterfaceIdiom == .pad {
+                    modelTabRow
+                } else {
+                    GlassEffectContainer(spacing: 10) { modelTabRow }
                 }
             }
             .scrollIndicators(.hidden)
@@ -228,6 +207,34 @@ struct WorkspaceView: View {
                 withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { proxy.scrollTo(id, anchor: .center) }
             }
         }
+    }
+
+    private var modelTabRow: some View {
+        HStack(spacing: 10) {
+            ForEach(store.visibleThreads) { thread in
+                let selected = store.selectedModel == thread.id
+                Button {
+                    withAnimation(reduceMotion ? nil : .snappy(duration: 0.25)) { store.selectedModel = thread.id }
+                } label: {
+                    HStack(spacing: 7) {
+                        Circle().fill(selected ? Color.blue : Color.secondary.opacity(0.4)).frame(width: 6, height: 6)
+                        Text(thread.configuration.name).font(.subheadline.weight(selected ? .semibold : .medium))
+                        if store.busyModels.contains(thread.id) { ProgressView().controlSize(.mini) }
+                    }
+                    .padding(.horizontal, 17).frame(minHeight: 44)
+                    .foregroundStyle(selected ? .blue : .primary)
+                    .glassEffect(.regular.tint(selected ? .blue.opacity(0.08) : .clear).interactive(), in: .capsule)
+                    .glassEffectID(thread.id, in: tabsNamespace)
+                }
+                .buttonStyle(.plain)
+                .modifier(IPadGlassClip(shape: Capsule()))
+                .accessibilityAddTraits(selected ? .isSelected : [])
+                .accessibilityLabel("\(thread.configuration.name)，\(selected ? "已选择" : "切换模型")")
+                .accessibilityIdentifier("model-tab-\(thread.configuration.name)")
+                .accessibilityHidden(drawerVisible)
+                .id(thread.id)
+            }
+        }.padding(.leading, 12).padding(.trailing, 4)
     }
 
     private func phoneBoard(readingInsets: EdgeInsets) -> some View {
@@ -326,18 +333,38 @@ struct MessageView: View {
 }
 
 
-/// One glass surface covers the status area and tabs; its lower edge is the boundary.
+struct IPadGlassClip<S: Shape>: ViewModifier {
+    let shape: S
+
+    func body(content: Content) -> some View {
+        if UIDevice.current.userInterfaceIdiom == .pad {
+            // Clip after the button/container renders its native glass shadow.
+            content.clipShape(shape)
+        } else {
+            content
+        }
+    }
+}
+
+/// Full-width bar background, with individual glass controls on iPad.
 private struct TopBarGlass: View {
     let safeAreaHeight: CGFloat
     var body: some View {
         GeometryReader { geometry in
-            Rectangle()
-                .fill(.clear)
-                .frame(height: geometry.size.height + safeAreaHeight + 4)
-                .glassEffect(.regular, in: .rect(cornerRadius: 0))
-                .opacity(0.82)
-                .clipped()
-                .offset(y: -safeAreaHeight)
+            Group {
+                if UIDevice.current.userInterfaceIdiom == .pad {
+                    // Match the page across the full bar; only the controls use glass.
+                    Rectangle().fill(Color(uiColor: .systemGroupedBackground))
+                } else {
+                    Rectangle()
+                        .fill(.clear)
+                        .glassEffect(.regular, in: .rect(cornerRadius: 0))
+                        .opacity(0.82)
+                }
+            }
+            .frame(height: geometry.size.height + safeAreaHeight + 4)
+            .clipped()
+            .offset(y: -safeAreaHeight)
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)

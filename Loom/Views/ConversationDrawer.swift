@@ -34,6 +34,7 @@ struct ConversationDrawer: View {
                         .frame(width: 32, height: 32)
                 }
                 .buttonStyle(.glass).buttonBorderShape(.circle).foregroundStyle(.primary)
+                .modifier(IPadGlassClip(shape: Circle()))
                 .accessibilityLabel("搜索聊天")
                 .accessibilityIdentifier("drawer-search-button")
             }.padding(.horizontal, 20)

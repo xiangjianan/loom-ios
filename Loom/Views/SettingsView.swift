@@ -56,9 +56,9 @@ struct SettingsView: View {
                     }.accessibilityIdentifier("settings-backup")
                 }
                 Section {
-                    LabeledContent("版本", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "")
                     Text("对话与高亮保存在本机。")
                         .font(.footnote).foregroundStyle(.secondary)
+                    Link("参与共建", destination: URL(string: "https://github.com/xiangjianan/loom-ios")!)
                 } header: { Text("关于") }
             }
             .navigationTitle("设置").navigationBarTitleDisplayMode(.inline)

@@ -93,7 +93,6 @@ import UIKit
         app.buttons[oldID].tap()
         XCTAssertTrue(app.staticTexts["继续讨论第1轮的问题"].firstMatch.waitForExistence(timeout: 5))
         menu.tap()
-        app.buttons["drawer-search-button"].tap()
         let search = app.textFields["drawer-search"]
         search.tap(); search.typeText("unlikely-conversation-123")
         XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "history-row-")).count, 0)
@@ -112,9 +111,10 @@ import UIKit
         let settings = app.buttons["drawer-settings"]
         let chatY = chat.frame.minY
         let settingsY = settings.frame.minY
-        app.buttons["drawer-search-button"].tap()
         let search = app.textFields["drawer-search"]
         XCTAssertTrue(search.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["drawer-search-button"].exists)
+        XCTAssertLessThan(search.frame.maxY, app.staticTexts["历史会话"].frame.minY)
         search.tap()
         search.typeText("不同")
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))

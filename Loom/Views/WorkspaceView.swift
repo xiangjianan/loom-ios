@@ -72,21 +72,7 @@ struct WorkspaceView: View {
                     .padding(.vertical, 4)
                     .padding(.bottom, 10)
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { topBarHeight = $0 }
-                    .background { ReadingBarGlass(edge: .top, safeAreaHeight: geometry.safeAreaInsets.top) }
-                    .overlay(alignment: .bottom) {
-                        Rectangle().fill(.clear)
-                            .frame(height: 12)
-                            .glassEffect(.regular, in: .rect(cornerRadius: 0))
-                            .mask {
-                                LinearGradient(colors: [.clear, .black, .black, .clear], startPoint: .leading, endPoint: .trailing)
-                                    .mask {
-                                        LinearGradient(colors: [.clear, .black, .clear], startPoint: .top, endPoint: .bottom)
-                                    }
-                            }
-                            .padding(.horizontal, 12)
-                            .allowsHitTesting(false)
-                            .accessibilityHidden(true)
-                    }
+                    .background { TopBarGlass(safeAreaHeight: geometry.safeAreaInsets.top) }
                     .allowsHitTesting(!drawerVisible)
                     .accessibilityHidden(drawerVisible)
                 }
@@ -316,29 +302,16 @@ struct MessageView: View {
 }
 
 
-/// Glass extends across the surrounding band and fades into the scrolling text.
-private struct ReadingBarGlass: View {
-    let edge: VerticalEdge
+/// One glass surface covers the status area and tabs; its lower edge is the boundary.
+private struct TopBarGlass: View {
     let safeAreaHeight: CGFloat
     var body: some View {
         GeometryReader { geometry in
             Rectangle()
                 .fill(.clear)
-                .frame(height: geometry.size.height + safeAreaHeight + 16)
-                .glassEffect(.regular.tint(Color(uiColor: .systemBackground).opacity(edge == .top ? 0.03 : 0)), in: .rect(cornerRadius: 0))
-                .opacity(edge == .top ? 0.8 : 0.55)
-                .mask {
-                    LinearGradient(stops: edge == .top ? [
-                        .init(color: .black, location: 0),
-                        .init(color: .black, location: 0.7),
-                        .init(color: .clear, location: 1)
-                    ] : [
-                        .init(color: .clear, location: 0),
-                        .init(color: .black, location: 0.3),
-                        .init(color: .black, location: 1)
-                    ], startPoint: .top, endPoint: .bottom)
-                }
-                .offset(y: edge == .top ? -safeAreaHeight : -16)
+                .frame(height: geometry.size.height + safeAreaHeight)
+                .glassEffect(.regular, in: .rect(cornerRadius: 0))
+                .offset(y: -safeAreaHeight)
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)

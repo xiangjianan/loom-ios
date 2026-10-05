@@ -6,7 +6,6 @@ struct ConversationDrawer: View {
     var close: () -> Void
     var settings: () -> Void
     @State private var search = ""
-    @State private var searching = false
     @FocusState private var searchFocused: Bool
     @State private var pendingSelection: UUID?
     @State private var pendingDeletion: UUID?
@@ -30,27 +29,21 @@ struct ConversationDrawer: View {
                     .accessibilityHidden(true)
                 Text("Loom").font(.title2.bold())
                 Spacer()
-                Button {
-                    withAnimation(.smooth(duration: 0.2)) { searching.toggle() }
-                    searchFocused = searching
-                    if !searching { search = "" }
-                } label: {
-                    Image(systemName: "magnifyingglass").font(.system(size: 19))
-                        .frame(width: 32, height: 32)
-                }
-                .buttonStyle(.glass).buttonBorderShape(.circle).foregroundStyle(.primary)
-                .accessibilityLabel("搜索聊天")
-                .accessibilityIdentifier("drawer-search-button")
             }.padding(.horizontal, 20)
-            if searching {
+            HStack(spacing: 10) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
                 TextField("搜索会话", text: $search)
                     .focused($searchFocused)
                     .submitLabel(.search)
-                    .padding(12).glassEffect(.regular.interactive(), in: .capsule)
-                    .padding(.horizontal, 20)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
                     .accessibilityIdentifier("drawer-search")
-                    .transition(.opacity.combined(with: .move(edge: .top)))
             }
+            .padding(12)
+            .glassEffect(.regular.interactive(), in: .capsule)
+            .padding(.horizontal, 20)
             Text("历史会话").font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 20)
             List {

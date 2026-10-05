@@ -3,6 +3,7 @@ import SwiftUI
 struct ThreadView: View {
     let thread: ModelThread
     var store: LoomStore
+    var readingInsets: EdgeInsets = EdgeInsets()
     @Binding var savedOffset: CGFloat
     var isActive: Bool
     @State private var position = ScrollPosition(idType: UUID.self)
@@ -37,6 +38,8 @@ struct ThreadView: View {
                 .frame(width: viewport.size.width, alignment: .center)
                 .background(VerticalReaderScrollLock().allowsHitTesting(false).accessibilityHidden(true))
             }
+            .contentMargins(.top, readingInsets.top, for: .scrollContent)
+            .contentMargins(.bottom, readingInsets.bottom, for: .scrollContent)
             .scrollPosition($position)
             .scrollIndicators(.hidden)
             .task(id: isActive) {

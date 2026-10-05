@@ -159,12 +159,16 @@ import UIKit
         let app = XCUIApplication()
         app.launchArguments = ["--demo", "--demo-rounds"]
         app.launch()
+        func readingTop(_ reader: XCUIElement) -> CGFloat {
+            let menu = app.buttons["workspace-menu"]
+            return max(reader.frame.minY, menu.exists ? menu.frame.maxY + 8 : reader.frame.minY)
+        }
         let first = app.scrollViews["thread-OpenAI"]
         XCTAssertTrue(first.waitForExistence(timeout: 10))
         first.swipeUp()
         let firstAnswer = first.textViews.matching(NSPredicate(format: "label == %@", "第1轮 · 第8段：这是一段可滚动的多轮回答。每个模型应该记住自己的阅读位置，轮次标记可以直接跳转。")).firstMatch
         Thread.sleep(forTimeInterval: 0.6)
-        let offsetA = first.frame.minY - firstAnswer.frame.minY
+        let offsetA = readingTop(first) - firstAnswer.frame.minY
         let leftA = firstAnswer.frame.minX
         first.swipeLeft()
         XCTAssertTrue(app.buttons["model-tab-Claude"].waitForExistence(timeout: 5))
@@ -174,19 +178,19 @@ import UIKit
         second.swipeUp()
         let secondAnswer = second.textViews.matching(NSPredicate(format: "label == %@", "第2轮 · 第3段：这是一段可滚动的多轮回答。每个模型应该记住自己的阅读位置，轮次标记可以直接跳转。")).firstMatch
         Thread.sleep(forTimeInterval: 0.6)
-        let offsetB = second.frame.minY - secondAnswer.frame.minY
+        let offsetB = readingTop(second) - secondAnswer.frame.minY
         let leftB = secondAnswer.frame.minX
         second.swipeRight()
         let restoredA = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-            abs((first.frame.minY - firstAnswer.frame.minY) - offsetA) < 25 && abs(firstAnswer.frame.minX - leftA) < 2
+            abs((readingTop(first) - firstAnswer.frame.minY) - offsetA) < 25 && abs(firstAnswer.frame.minX - leftA) < 2
         }, object: first)
-        XCTAssertEqual(XCTWaiter.wait(for: [restoredA], timeout: 5), .completed, "Expected \(offsetA), actual \(first.frame.minY - firstAnswer.frame.minY)")
+        XCTAssertEqual(XCTWaiter.wait(for: [restoredA], timeout: 5), .completed, "Expected \(offsetA), actual \(readingTop(first) - firstAnswer.frame.minY)")
         XCTAssertEqual(firstAnswer.frame.minX, leftA, accuracy: 2, "Paging must preserve horizontal text alignment")
         first.swipeLeft()
         let restoredB = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-            abs((second.frame.minY - secondAnswer.frame.minY) - offsetB) < 25 && abs(secondAnswer.frame.minX - leftB) < 2
+            abs((readingTop(second) - secondAnswer.frame.minY) - offsetB) < 25 && abs(secondAnswer.frame.minX - leftB) < 2
         }, object: second)
-        XCTAssertEqual(XCTWaiter.wait(for: [restoredB], timeout: 5), .completed, "Expected \(offsetB), actual \(second.frame.minY - secondAnswer.frame.minY)")
+        XCTAssertEqual(XCTWaiter.wait(for: [restoredB], timeout: 5), .completed, "Expected \(offsetB), actual \(readingTop(second) - secondAnswer.frame.minY)")
         XCTAssertEqual(secondAnswer.frame.minX, leftB, accuracy: 2, "Paging must preserve horizontal text alignment")
     }
 
@@ -242,9 +246,10 @@ import UIKit
         XCTAssertTrue(tab.waitForExistence(timeout: 10))
         let scroll = app.scrollViews["thread-OpenAI"]
         let height = scroll.frame.height
+        XCTAssertLessThan(scroll.frame.minY, tab.frame.minY, "The reader must extend behind the glass bar")
         scroll.swipeUp()
         XCTAssertTrue(tab.waitForNonExistence(timeout: 5))
-        XCTAssertGreaterThan(scroll.frame.height, height + 50)
+        XCTAssertGreaterThanOrEqual(scroll.frame.height + 1, height)
         // Native paging may inset the frame at rounded screen corners. Reading must
         // extend into the status-bar band and reach the bottom edge.
         let fullScreen = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
@@ -266,10 +271,11 @@ import UIKit
         XCTAssertTrue(tab.waitForExistence(timeout: 10))
         let scroll = app.scrollViews["thread-OpenAI"]
         let originalHeight = scroll.frame.height
+        XCTAssertLessThan(scroll.frame.minY, tab.frame.minY, "The reader must extend behind the glass bar")
         scroll.swipeUp()
         XCTAssertTrue(tab.waitForNonExistence(timeout: 5))
         XCTAssertFalse(app.textFields["prompt-field"].exists)
-        XCTAssertGreaterThan(scroll.frame.height, originalHeight + 50)
+        XCTAssertGreaterThanOrEqual(scroll.frame.height + 1, originalHeight)
         // Native paging may inset the frame at rounded screen corners. Reading must
         // extend into the status-bar band and reach the bottom edge.
         let fullScreen = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
@@ -277,9 +283,13 @@ import UIKit
         }, object: scroll)
         XCTAssertEqual(XCTWaiter.wait(for: [fullScreen], timeout: 5), .completed, "Reading viewport: \(scroll.frame); screen: \(app.frame)")
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.lifetime = .keepAlways; add(screenshot)
+        scroll.swipeUp()
         scroll.swipeDown()
         XCTAssertTrue(tab.waitForExistence(timeout: 5))
         XCTAssertTrue(app.textFields["prompt-field"].exists)
+        Thread.sleep(forTimeInterval: 0.5)
+        let glassScreenshot = XCTAttachment(screenshot: app.screenshot()); glassScreenshot.lifetime = .keepAlways; add(glassScreenshot)
+        XCTAssertGreaterThan(scroll.frame.maxY, app.textFields["prompt-field"].frame.maxY, "The reader must extend behind the input surroundings")
         scroll.swipeUp()
         XCTAssertTrue(tab.waitForNonExistence(timeout: 5))
         scroll.swipeLeft()

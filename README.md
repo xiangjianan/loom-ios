@@ -162,3 +162,13 @@ xcodebuild test -project Loom.xcodeproj -scheme Loom \
 验证：26 项单元测试、7 项 iPhone 界面检查和 3 项 iPad 界面检查通过，覆盖正文居中、轮次跳转、阅读位置恢复、输入框、SVG 与选择自动滚动。真机签名构建通过。触觉反馈需在真机体验。
 
 ![Liquid Glass 控件](docs/glass-controls-1.5.png)
+
+
+## 1.5.1 上下栏周边的透视效果
+
+正文始终延伸到状态栏、模型标签和输入框后方。上下栏周围使用整片原生 Liquid Glass，边缘渐变淡出；正文的首尾通过动态内容边距避开控件，输入框换行和引用区展开时也会更新底部边距。
+
+验证：6 项 iPhone 界面检查与 3 项 iPad 界面检查通过，覆盖玻璃栏后的完整阅读范围、模型位置恢复、轮次跳转、键盘输入、多行输入框、选择自动滚动和横竖屏并排阅读。已检查浅色和深色透视效果，真机签名构建通过。
+
+![浅色玻璃周边](docs/glass-surroundings-1.5.1-light.png)
+![深色玻璃周边](docs/glass-surroundings-1.5.1-dark.png)

@@ -8,6 +8,8 @@ struct WorkspaceView: View {
     @State private var sheet: WorkspaceSheet?
     @State private var showNewConfirmation = false
     @State private var readingChromeVisible = true
+    @State private var topBarHeight: CGFloat = 60
+    @State private var bottomBarHeight: CGFloat = 66
     @State private var chromeChangedAt = Date.distantPast
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Namespace private var tabsNamespace
@@ -16,12 +18,13 @@ struct WorkspaceView: View {
         NavigationStack {
             GeometryReader { geometry in
                 let parallel = geometry.size.width >= 700
+                let readingInsets = EdgeInsets(top: readingChromeVisible ? geometry.safeAreaInsets.top + topBarHeight : 0, leading: 0, bottom: readingChromeVisible ? geometry.safeAreaInsets.bottom + bottomBarHeight : 0, trailing: 0)
                 ZStack {
                     Color(uiColor: .systemGroupedBackground).ignoresSafeArea()
-                    if parallel { parallelBoard(width: geometry.size.width) }
-                    else { phoneBoard }
+                    if parallel { parallelBoard(width: geometry.size.width, readingInsets: readingInsets) }
+                    else { phoneBoard(readingInsets: readingInsets) }
                 }
-                .ignoresSafeArea(.container, edges: readingChromeVisible ? [] : .vertical)
+                .ignoresSafeArea(.container, edges: .vertical)
                 .overlay(alignment: .top) {
                     if !readingChromeVisible {
                         Rectangle()
@@ -42,7 +45,7 @@ struct WorkspaceView: View {
                             .transition(.opacity)
                     }
                 }
-                .safeAreaInset(edge: .top, spacing: 0) {
+                .safeAreaBar(edge: .top, spacing: 0) {
                     if readingChromeVisible {
                         HStack(spacing: 8) {
                             modelTabs
@@ -60,12 +63,16 @@ struct WorkspaceView: View {
                             .accessibilityLabel("更多操作").accessibilityIdentifier("workspace-menu")
                             .padding(.trailing, 12)
                         }.padding(.vertical, 4)
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { topBarHeight = $0 }
+                        .background { ReadingBarGlass(edge: .top, safeAreaHeight: geometry.safeAreaInsets.top) }
                         .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
                     }
                 }
-                .safeAreaInset(edge: .bottom, spacing: 0) {
+                .safeAreaBar(edge: .bottom, spacing: 0) {
                     if readingChromeVisible {
                         ComposerView(store: store)
+                            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { bottomBarHeight = $0 }
+                            .background { ReadingBarGlass(edge: .bottom, safeAreaHeight: geometry.safeAreaInsets.bottom) }
                             .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
                     }
                 }
@@ -147,10 +154,10 @@ struct WorkspaceView: View {
         }
     }
 
-    private var phoneBoard: some View {
+    private func phoneBoard(readingInsets: EdgeInsets) -> some View {
         TabView(selection: $store.selectedModel) {
             ForEach(store.current.threads) { thread in
-                ThreadView(thread: thread, store: store, savedOffset: readingOffset(for: thread.id), isActive: store.selectedModel == thread.id, onReadingScroll: readingScrolled)
+                ThreadView(thread: thread, store: store, readingInsets: readingInsets, savedOffset: readingOffset(for: thread.id), isActive: store.selectedModel == thread.id, onReadingScroll: readingScrolled)
                     .tag(thread.id)
             }
         }
@@ -159,7 +166,7 @@ struct WorkspaceView: View {
         .accessibilityIdentifier("model-pages")
     }
 
-    private func parallelBoard(width: CGFloat) -> some View {
+    private func parallelBoard(width: CGFloat, readingInsets: EdgeInsets) -> some View {
         let count = max(1, store.current.threads.count)
         let columnWidth = max(310, (width - 48 - CGFloat(count - 1) * 16) / CGFloat(count))
         return ScrollViewReader { proxy in
@@ -167,7 +174,7 @@ struct WorkspaceView: View {
             GlassEffectContainer(spacing: 16) {
             HStack(alignment: .top, spacing: 16) {
                 ForEach(store.current.threads) { thread in
-                    ThreadView(thread: thread, store: store, savedOffset: readingOffset(for: thread.id), isActive: true, onReadingScroll: readingScrolled)
+                    ThreadView(thread: thread, store: store, readingInsets: readingInsets, savedOffset: readingOffset(for: thread.id), isActive: true, onReadingScroll: readingScrolled)
                         .frame(width: columnWidth).id(thread.id)
                 }
             }.padding(.horizontal, 24).padding(.top, 12)
@@ -241,5 +248,35 @@ struct MessageView: View {
                 }.frame(maxWidth: .infinity, alignment: .leading)
             }
         }
+    }
+}
+
+
+/// Glass extends across the surrounding band and fades into the scrolling text.
+private struct ReadingBarGlass: View {
+    let edge: VerticalEdge
+    let safeAreaHeight: CGFloat
+    var body: some View {
+        GeometryReader { geometry in
+            Rectangle()
+                .fill(.clear)
+                .frame(height: geometry.size.height + safeAreaHeight + 16)
+                .glassEffect(.regular.tint(Color(uiColor: .systemBackground).opacity(0.03)), in: .rect(cornerRadius: 0))
+                .opacity(0.8)
+                .mask {
+                    LinearGradient(stops: edge == .top ? [
+                        .init(color: .black, location: 0),
+                        .init(color: .black, location: 0.7),
+                        .init(color: .clear, location: 1)
+                    ] : [
+                        .init(color: .clear, location: 0),
+                        .init(color: .black, location: 0.3),
+                        .init(color: .black, location: 1)
+                    ], startPoint: .top, endPoint: .bottom)
+                }
+                .offset(y: edge == .top ? -safeAreaHeight : -16)
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }

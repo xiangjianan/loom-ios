@@ -93,6 +93,7 @@ import UIKit
         app.buttons[oldID].tap()
         XCTAssertTrue(app.staticTexts["继续讨论第1轮的问题"].firstMatch.waitForExistence(timeout: 5))
         menu.tap()
+        app.buttons["drawer-search-button"].tap()
         let search = app.textFields["drawer-search"]
         search.tap(); search.typeText("unlikely-conversation-123")
         XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "history-row-")).count, 0)
@@ -111,9 +112,10 @@ import UIKit
         let settings = app.buttons["drawer-settings"]
         let chatY = chat.frame.minY
         let settingsY = settings.frame.minY
+        app.buttons["drawer-search-button"].tap()
         let search = app.textFields["drawer-search"]
         XCTAssertTrue(search.waitForExistence(timeout: 5))
-        XCTAssertFalse(app.buttons["drawer-search-button"].exists)
+        XCTAssertTrue(app.buttons["drawer-search-button"].exists)
         XCTAssertLessThan(search.frame.maxY, app.staticTexts["历史会话"].frame.minY)
         search.tap()
         search.typeText("不同")
@@ -127,12 +129,28 @@ import UIKit
             .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.45, dy: 0.48)))
         let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in !app.keyboards.firstMatch.exists }, object: app)
         XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: 5), .completed)
-        XCTAssertEqual(search.value as? String, "不同")
+        XCTAssertTrue(search.waitForNonExistence(timeout: 5))
         XCTAssertTrue(app.buttons["drawer-settings"].isHittable)
         let shot = XCTAttachment(screenshot: app.screenshot()); shot.lifetime = .keepAlways; add(shot)
-        search.tap()
+        app.buttons["drawer-search-button"].tap()
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
         search.typeText("观点")
-        XCTAssertEqual(search.value as? String, "不同观点")
+        XCTAssertEqual(search.value as? String, "观点")
+    }
+
+    func testLeftSwipeOnDrawerClosesItWithoutSwitchingModels() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--demo"]
+        app.launch()
+        let menu = app.buttons["workspace-menu"]
+        XCTAssertTrue(menu.waitForExistence(timeout: 10))
+        menu.tap()
+        XCTAssertTrue(app.buttons["drawer-settings"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.textFields["drawer-search"].exists)
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.65, dy: 0.5))
+            .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.15, dy: 0.5)))
+        XCTAssertTrue(app.buttons["drawer-settings"].waitForNonExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["model-tab-OpenAI"].isSelected)
     }
 
     func testEdgeRevealKeepsModelAndSettingsKeepsDrawerOpen() throws {
@@ -477,9 +495,8 @@ import UIKit
         let row = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "history-row-")).firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 5))
         let originalLabel = row.label
-        let start = row.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5))
-        let end = row.coordinate(withNormalizedOffset: CGVector(dx: 0.02, dy: 0.5))
-        start.press(forDuration: 0.8, thenDragTo: end)
+        row.press(forDuration: 1.2)
+        app.buttons["删除会话"].tap()
         let alert = app.alerts.firstMatch
         XCTAssertTrue(alert.waitForExistence(timeout: 5))
         XCTAssertTrue(alert.buttons["取消"].exists)
@@ -487,7 +504,8 @@ import UIKit
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.lifetime = .keepAlways; add(screenshot)
         alert.buttons["取消"].tap()
         XCTAssertEqual(row.label, originalLabel)
-        start.press(forDuration: 0.8, thenDragTo: end)
+        row.press(forDuration: 1.2)
+        app.buttons["删除会话"].tap()
         XCTAssertTrue(alert.waitForExistence(timeout: 5))
         alert.buttons["删除"].tap()
         XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label == %@", originalLabel)).firstMatch.exists)

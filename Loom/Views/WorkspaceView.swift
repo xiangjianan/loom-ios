@@ -70,6 +70,7 @@ struct WorkspaceView: View {
                         modelTabs
                     }
                     .padding(.bottom, 2)
+                    .offset(y: -2)
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { topBarHeight = $0 }
                     .background { TopBarGlass(safeAreaHeight: geometry.safeAreaInsets.top) }
                     .allowsHitTesting(!drawerVisible)
@@ -92,7 +93,6 @@ struct WorkspaceView: View {
                         Color.clear.frame(width: geometry.size.width - drawerWidth)
                             .contentShape(.rect)
                             .onTapGesture { closeDrawer() }
-                            .gesture(drawerGesture(width: drawerWidth, opening: false))
                             .accessibilityLabel("关闭会话侧栏")
                             .accessibilityAddTraits(.isButton)
                             .accessibilityIdentifier("drawer-backdrop")
@@ -104,6 +104,15 @@ struct WorkspaceView: View {
                         .allowsHitTesting(!drawerVisible)
                         .accessibilityHidden(true)
                 }
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 16)
+                        .onChanged { value in
+                            guard drawerVisible, sheet == nil,
+                                  value.translation.width < -48,
+                                  abs(value.translation.width) > abs(value.translation.height) * 1.2 else { return }
+                            closeDrawer()
+                        }
+                )
                 .mask { Rectangle().ignoresSafeArea() }
 
 

@@ -6,6 +6,7 @@ struct ConversationDrawer: View {
     var close: () -> Void
     var settings: () -> Void
     @State private var search = ""
+    @State private var searching = false
     @FocusState private var searchFocused: Bool
     @State private var pendingSelection: UUID?
     @State private var pendingDeletion: UUID?
@@ -29,21 +30,34 @@ struct ConversationDrawer: View {
                     .accessibilityHidden(true)
                 Text("Loom").font(.title2.bold())
                 Spacer()
+                Button {
+                    withAnimation(.smooth(duration: 0.2)) { searching = true }
+                    searchFocused = true
+                } label: {
+                    Image(systemName: "magnifyingglass").font(.system(size: 19))
+                        .frame(width: 32, height: 32)
+                }
+                .buttonStyle(.glass).buttonBorderShape(.circle).foregroundStyle(.primary)
+                .accessibilityLabel("搜索聊天")
+                .accessibilityIdentifier("drawer-search-button")
             }.padding(.horizontal, 20)
-            HStack(spacing: 10) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
-                    .accessibilityHidden(true)
-                TextField("搜索会话", text: $search)
-                    .focused($searchFocused)
-                    .submitLabel(.search)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .accessibilityIdentifier("drawer-search")
+            if searching {
+                HStack(spacing: 10) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
+                    TextField("搜索会话", text: $search)
+                        .focused($searchFocused)
+                        .submitLabel(.search)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .accessibilityIdentifier("drawer-search")
+                }
+                .padding(12)
+                .glassEffect(.regular.interactive(), in: .capsule)
+                .padding(.horizontal, 20)
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
-            .padding(12)
-            .glassEffect(.regular.interactive(), in: .capsule)
-            .padding(.horizontal, 20)
             Text("历史会话").font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 20)
             List {
@@ -63,9 +77,11 @@ struct ConversationDrawer: View {
                     .listRowSeparator(.hidden)
                     .listRowBackground(conversation.id == store.selectedConversation ? Color.primary.opacity(0.06) : Color.clear)
                     .accessibilityAddTraits(conversation.id == store.selectedConversation ? .isSelected : [])
-                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                        Button("删除") { pendingDeletion = conversation.id; confirmDeletion = true }
-                            .tint(.red).accessibilityIdentifier("history-delete-\(conversation.id)")
+                    .contextMenu {
+                        Button("删除会话", systemImage: "trash", role: .destructive) {
+                            pendingDeletion = conversation.id; confirmDeletion = true
+                        }
+                        .accessibilityIdentifier("history-delete-\(conversation.id)")
                     }
                 }
             }
@@ -102,6 +118,12 @@ struct ConversationDrawer: View {
                     searchFocused = false
                 }
         )
+        .onChange(of: searchFocused) { _, focused in
+            if !focused {
+                withAnimation(.smooth(duration: 0.2)) { searching = false }
+                search = ""
+            }
+        }
         .accessibilityAction(.escape, close)
         .confirmationDialog("停止当前生成并打开这段对话？", isPresented: $confirmSelection, titleVisibility: .visible) {
             Button("停止并打开", role: .destructive) {

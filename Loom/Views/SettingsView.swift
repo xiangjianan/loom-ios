@@ -5,6 +5,7 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showBackup = false
     @State private var clearConfirmation = false
+    @State private var modelEditMode: EditMode = .inactive
 
     var body: some View {
         NavigationStack {
@@ -35,13 +36,14 @@ struct SettingsView: View {
                             .accessibilityIdentifier("model-enabled-\(configuration.id)")
                         }
                     }
+                    .onMove { source, destination in store.moveModels(from: source, to: destination) }
                     if store.configurations.count < 5 {
                         NavigationLink {
                             ModelEditor(store: store, configuration: ModelConfiguration(name: "", endpoint: "https://api.openai.com/v1", model: ""))
                         } label: { Label("添加模型", systemImage: "plus") }
                     }
                 } header: { Text("模型 · 最多 5 个") } footer: {
-                    Text("关闭模型会暂停发送并隐藏页面，历史保留。生成中暂不能切换。")
+                    Text("点击排序后拖动模型可调整页面顺序。关闭模型会暂停发送并隐藏页面，历史保留。生成中暂不能修改。")
                 }.disabled(store.isWorking)
                 Section {
                     Picker("句子快捷高亮", selection: $store.singleTapHighlight) {
@@ -61,8 +63,12 @@ struct SettingsView: View {
                     Link("参与共建", destination: URL(string: "https://github.com/xiangjianan/loom-ios")!)
                 } header: { Text("关于") }
             }
+            .environment(\.editMode, $modelEditMode)
             .navigationTitle("设置").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .topBarLeading) { Button(modelEditMode.isEditing ? "结束排序" : "排序") {
+                    withAnimation { modelEditMode = modelEditMode.isEditing ? .inactive : .active }
+                }.disabled(store.isWorking).accessibilityIdentifier("sort-models") }
+                ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
             .sheet(isPresented: $showBackup) { BackupView(store: store) }
             .confirmationDialog("清除所有高亮与待发送引用？", isPresented: $clearConfirmation, titleVisibility: .visible) {
                 Button("清除高亮", role: .destructive) { store.clearHighlights() }

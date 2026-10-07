@@ -276,12 +276,29 @@ struct MessageView: View {
     let thread: ModelThread
     var store: LoomStore
     @State private var referencesExpanded = false
+    @State private var copied = false
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
                 Text(message.role == "user" ? "你" : thread.configuration.name).font(.caption.weight(.semibold))
                 Text("第 \(message.round) 轮").font(.caption2).foregroundStyle(.tertiary)
                 Spacer()
+                if message.role == "user" {
+                    Button {
+                        UIPasteboard.general.string = message.display ?? message.content
+                        copied = true
+                    } label: {
+                        Label(copied ? "已复制" : "复制", systemImage: copied ? "checkmark" : "doc.on.doc")
+                    }
+                    .buttonStyle(.plain).font(.caption)
+                    .accessibilityLabel("复制已发送消息")
+                    .accessibilityIdentifier("copy-message-\(message.id)")
+                    .task(id: copied) {
+                        guard copied else { return }
+                        try? await Task.sleep(for: .seconds(2))
+                        if !Task.isCancelled { copied = false }
+                    }
+                }
                 if message.role == "assistant", !message.pending, !message.error {
                     ShareLink(item: message.content) { Image(systemName: "square.and.arrow.up") }
                         .font(.caption).foregroundStyle(.secondary).accessibilityLabel("分享回答")

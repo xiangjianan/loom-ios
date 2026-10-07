@@ -24,6 +24,23 @@ final class LoomStore {
     var isWorking: Bool { !busyModels.isEmpty }
     var visibleThreads: [ModelThread] { current.threads.filter { isModelEnabled($0.id) } }
 
+    func moveModels(from source: IndexSet, to destination: Int) {
+        guard !isWorking, !source.isEmpty, source.allSatisfy({ configurations.indices.contains($0) }),
+              (0...configurations.count).contains(destination) else { return }
+        let moving = source.sorted().map { configurations[$0] }
+        for index in source.sorted(by: >) { configurations.remove(at: index) }
+        configurations.insert(contentsOf: moving, at: destination - source.filter { $0 < destination }.count)
+        let order = Dictionary(uniqueKeysWithValues: configurations.enumerated().map { ($0.element.id, $0.offset) })
+        for index in conversations.indices {
+            conversations[index].threads = conversations[index].threads.enumerated().sorted {
+                let left = order[$0.element.id] ?? configurations.count
+                let right = order[$1.element.id] ?? configurations.count
+                return left == right ? $0.offset < $1.offset : left < right
+            }.map(\.element)
+        }
+        save()
+    }
+
     func isModelEnabled(_ id: UUID) -> Bool {
         configurations.first(where: { $0.id == id })?.isEnabled ?? true
     }

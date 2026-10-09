@@ -298,7 +298,31 @@ import UIKit
         XCTAssertTrue(prompt.exists)
     }
 
+    func testPhoneRemainsPortraitWhenDeviceRotates() throws {
+        try XCTSkipIf(UIDevice.current.userInterfaceIdiom == .pad, "iPad supports rotation")
+        XCUIDevice.shared.orientation = .portrait
+        defer { XCUIDevice.shared.orientation = .portrait }
+        let app = XCUIApplication()
+        app.launchArguments = ["--demo"]
+        app.launch()
+        let claude = app.buttons["model-tab-Claude"]
+        XCTAssertTrue(claude.waitForExistence(timeout: 10))
+        claude.tap()
+        let prompt = app.textFields["prompt-field"]
+        prompt.tap()
+        prompt.typeText("保留竖屏草稿")
+        for orientation in [UIDeviceOrientation.landscapeLeft, .landscapeRight] {
+            XCUIDevice.shared.orientation = orientation
+            XCTAssertTrue(claude.isSelected)
+            XCTAssertEqual(prompt.value as? String, "保留竖屏草稿")
+            XCTAssertTrue(app.buttons["send-button"].isEnabled)
+            XCTAssertGreaterThan(app.windows.firstMatch.frame.height, app.windows.firstMatch.frame.width)
+            XCTAssertFalse(app.scrollViews["parallel-board"].exists)
+        }
+    }
+
     func testRotationPreservesSelectedModelAndDraft() throws {
+        try XCTSkipUnless(UIDevice.current.userInterfaceIdiom == .pad, "Only iPad supports interface rotation")
         XCUIDevice.shared.orientation = .portrait
         defer { XCUIDevice.shared.orientation = .portrait }
         let app = XCUIApplication()

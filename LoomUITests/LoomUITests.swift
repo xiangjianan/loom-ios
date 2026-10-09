@@ -298,6 +298,37 @@ import UIKit
         XCTAssertTrue(prompt.exists)
     }
 
+    func testRotationPreservesSelectedModelAndDraft() throws {
+        XCUIDevice.shared.orientation = .portrait
+        defer { XCUIDevice.shared.orientation = .portrait }
+        let app = XCUIApplication()
+        app.launchArguments = ["--demo"]
+        app.launch()
+        let claude = app.buttons["model-tab-Claude"]
+        XCTAssertTrue(claude.waitForExistence(timeout: 10))
+        claude.tap()
+        let prompt = app.textFields["prompt-field"]
+        prompt.tap()
+        prompt.typeText("旋转后保留草稿")
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let landscape = NSPredicate { _, _ in app.windows.firstMatch.frame.width > app.windows.firstMatch.frame.height }
+        expectation(for: landscape, evaluatedWith: app)
+        waitForExpectations(timeout: 10)
+        XCTAssertTrue(claude.isSelected)
+        XCTAssertEqual(prompt.value as? String, "旋转后保留草稿")
+        XCTAssertTrue(app.buttons["send-button"].isEnabled)
+        if app.windows.firstMatch.frame.width >= 700 {
+            XCTAssertTrue(app.scrollViews["parallel-board"].exists)
+        }
+        XCUIDevice.shared.orientation = .portrait
+        let portrait = NSPredicate { _, _ in app.windows.firstMatch.frame.height > app.windows.firstMatch.frame.width }
+        expectation(for: portrait, evaluatedWith: app)
+        waitForExpectations(timeout: 10)
+        XCTAssertTrue(claude.isSelected)
+        XCTAssertEqual(prompt.value as? String, "旋转后保留草稿")
+        XCTAssertTrue(app.scrollViews["thread-Claude"].isHittable)
+    }
+
     func testPadDisplaysParallelAnswersAndFixedComposer() throws {
         try XCTSkipUnless(UIDevice.current.userInterfaceIdiom == .pad, "Parallel columns are an iPad layout")
         let app = XCUIApplication()

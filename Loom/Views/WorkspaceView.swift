@@ -27,6 +27,7 @@ struct WorkspaceView: View {
     var body: some View {
         NavigationStack {
             GeometryReader { geometry in
+                // Use the live window width so folding and rotation select the same layout.
                 let parallel = geometry.size.width >= 700
                 // The glass bars stay visible while content scrolls underneath.
                 let readingInsets = EdgeInsets(top: geometry.safeAreaInsets.top + topBarHeight, leading: 0, bottom: geometry.safeAreaInsets.bottom + bottomBarHeight, trailing: 0)
@@ -121,6 +122,9 @@ struct WorkspaceView: View {
                     including: drawerVisible && sheet == nil ? .all : .none
                 )
                 .mask { Rectangle().ignoresSafeArea() }
+                .onChange(of: parallel) { _, _ in
+                    pageSelection = store.selectedModel
+                }
 
 
             }
@@ -203,6 +207,7 @@ struct WorkspaceView: View {
                 }
             }
             .scrollIndicators(.hidden)
+            .onAppear { proxy.scrollTo(store.selectedModel, anchor: .center) }
             .onChange(of: store.selectedModel) { _, id in
                 withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { proxy.scrollTo(id, anchor: .center) }
             }
@@ -264,6 +269,8 @@ struct WorkspaceView: View {
             }.padding(.horizontal, 24).padding(.top, 12)
             }
         }.scrollIndicators(.hidden)
+        .accessibilityIdentifier("parallel-board")
+        .onAppear { proxy.scrollTo(store.selectedModel, anchor: .center) }
         .onChange(of: store.selectedModel) { _, id in
             withAnimation(reduceMotion ? nil : .snappy) { proxy.scrollTo(id, anchor: .center) }
         }

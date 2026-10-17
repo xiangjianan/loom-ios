@@ -61,6 +61,7 @@ struct SettingsView: View {
                     Text("Loom 是一款开源的多模型对话应用，让不同观点交织，帮助你探索想法、开展头脑风暴。")
                         .font(.footnote).foregroundStyle(.secondary)
                     Link("参与共建", destination: URL(string: "https://github.com/xiangjianan/loom-ios")!)
+                    Link("隐私政策", destination: URL(string: "https://github.com/xiangjianan/loom-ios/blob/main/docs/PRIVACY.md")!)
                 } header: { Text("关于") }
             }
             .environment(\.editMode, $modelEditMode)

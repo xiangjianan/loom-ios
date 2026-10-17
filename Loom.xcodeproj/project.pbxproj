@@ -81,8 +81,8 @@
 		BF9EDCF03844F608F14C96AF /* LoomUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = LoomUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C44DEA3B7E1FFEB14AC52F58 /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
 		C9E44FEEF209CD74A3F0C441 /* BackupTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupTests.swift; sourceTree = "<group>"; };
-		CFB0FB42BDCFD78AC68A01BF /* Loom.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Loom.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		E1C56B209A789F8A6B688544 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		CFB0FB42BDCFD78AC68A01BF /* Loom.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Loom.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		E1C56B209A789F8A6B688544 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		EA2957A5D4E4B89EBEF22DF6 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		EDBEE1BEC01864BF5606D35F /* LoomUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoomUITests.swift; sourceTree = "<group>"; };
 		EDC9DE4F5DD5E63D0B07B9C5 /* ComposerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerView.swift; sourceTree = "<group>"; };
@@ -265,7 +265,6 @@
 						TestTargetID = 92B1BC83B42A8E6DA14FE2C3;
 					};
 					92B1BC83B42A8E6DA14FE2C3 = {
-						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
 					};
 					ED826D576EF84C5DCAA12309 = {
@@ -404,6 +403,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = 4B4U2WGR79;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -451,6 +451,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = 4B4U2WGR79;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
